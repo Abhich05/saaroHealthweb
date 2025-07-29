@@ -1,0 +1,169 @@
+import { useNavigate } from "react-router-dom";
+import { CgProfile } from "react-icons/cg";
+import { IoMdNotifications } from "react-icons/io";
+import { useContext, useState, useRef, useEffect } from "react";
+import { DoctorNameContext, UserContext } from "../../App";
+import axiosInstance from '../../api/axiosInstance';
+
+const Header = () => {
+  const navigate = useNavigate();
+  const doctorName = useContext(DoctorNameContext);
+  const user = useContext(UserContext);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [profilePicture, setProfilePicture] = useState(null);
+  const dropdownRef = useRef(null);
+
+  const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+  const currentUserName = isUserLogin ? localStorage.getItem('userName') : doctorName;
+  const currentUserRole = isUserLogin ? localStorage.getItem('userRole') : 'Doctor';
+
+  // Fetch profile picture
+  useEffect(() => {
+    const fetchProfilePicture = async () => {
+      try {
+        const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+        const doctorId = localStorage.getItem('doctorId');
+        
+        let endpoint;
+        if (isUserLogin) {
+          endpoint = '/user/me';
+        } else {
+          endpoint = `/doctor/${doctorId}/profile`;
+        }
+        
+        const response = await axiosInstance.get(endpoint);
+        const profileData = response.data.doctor || response.data.user;
+        
+        console.log('Header - Profile data received:', profileData);
+        console.log('Header - Avatar URL:', profileData.avatar);
+        
+        if (profileData.avatar) {
+          setProfilePicture(profileData.avatar);
+        }
+      } catch (error) {
+        console.error('Error fetching profile picture:', error);
+      }
+    };
+    
+    fetchProfilePicture();
+  }, []);
+
+  const logoutHandler = async () => {
+    try {
+      if (isUserLogin) {
+        await axiosInstance.post('/user/logout');
+      } else {
+        await axiosInstance.post('/logout');
+      }
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+    
+    // Clear all stored data
+    localStorage.clear();
+    navigate("/login", { replace: true });
+  };
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-xl font-semibold text-gray-900">Saaro Health</h1>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          {/* Notifications */}
+          <button className="p-2 text-gray-400 hover:text-gray-600 transition">
+            <IoMdNotifications size={20} />
+          </button>
+
+          {/* User Profile Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition"
+            >
+              {profilePicture ? (
+                <img 
+                  src={profilePicture} 
+                  alt="Profile" 
+                  className="w-8 h-8 rounded-full object-cover"
+                  onError={(e) => {
+                    console.log('Avatar image failed to load:', profilePicture);
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+              ) : null}
+              <CgProfile size={20} className="text-gray-600" style={{ display: profilePicture ? 'none' : 'block' }} />
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">{currentUserName}</p>
+                <p className="text-xs text-gray-500 capitalize">{currentUserRole}</p>
+              </div>
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <div className="flex items-center space-x-2">
+                    {profilePicture ? (
+                      <img 
+                        src={profilePicture} 
+                        alt="Profile" 
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={(e) => {
+                          console.log('Avatar image failed to load in dropdown:', profilePicture);
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }}
+                      />
+                    ) : null}
+                    <CgProfile size={20} className="text-gray-600" style={{ display: profilePicture ? 'none' : 'block' }} />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{currentUserName}</p>
+                      <p className="text-xs text-gray-500 capitalize">{currentUserRole}</p>
+                      {isUserLogin && (
+                        <p className="text-xs text-gray-500">
+                          Clinic: {localStorage.getItem('clinicName')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate('/settings');
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Settings
+                </button>
+                
+                <button
+                  onClick={logoutHandler}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Header;
