@@ -274,7 +274,8 @@ const Document = () => {
                     </div>
                   );
                 }
-                return null;
+                // Return the default value for other columns
+                return row[accessor] || '';
               }}
             />
 
