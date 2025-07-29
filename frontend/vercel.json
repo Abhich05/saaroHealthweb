@@ -4,5 +4,13 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "VITE_API_BASE_URL": "https://saarohealthweb-1.onrender.com/api"
+  },
+  "build": {
+    "env": {
+      "VITE_API_BASE_URL": "https://saarohealthweb-1.onrender.com/api"
+    }
+  }
 }
