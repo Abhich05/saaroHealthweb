@@ -32,20 +32,17 @@ axiosInstance.interceptors.request.use(
         console.log('Added user JWT to Authorization header');
       }
     } else {
-      // Use doctor JWT token
-      const token = cookies.get('jwt_token');
-      console.log('Doctor JWT token:', token ? 'Present' : 'Missing');
+      // Use doctor JWT token - prioritize localStorage over cookies
+      const localStorageToken = localStorage.getItem('jwt_token');
+      const cookieToken = cookies.get('jwt_token');
+      
+      console.log('Doctor JWT from localStorage:', localStorageToken ? 'Present' : 'Missing');
+      console.log('Doctor JWT from cookie:', cookieToken ? 'Present' : 'Missing');
+      
+      const token = localStorageToken || cookieToken;
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log('Added doctor JWT to Authorization header');
-      } else {
-        // Fallback: try to get from localStorage if cookie is missing
-        const fallbackToken = localStorage.getItem('jwt_token');
-        console.log('Fallback JWT token:', fallbackToken ? 'Present' : 'Missing');
-        if (fallbackToken) {
-          config.headers.Authorization = `Bearer ${fallbackToken}`;
-          console.log('Added fallback JWT to Authorization header');
-        }
       }
     }
     
@@ -63,7 +60,10 @@ axiosInstance.interceptors.response.use(
       // Clear tokens on unauthorized access
       cookies.remove('jwt_token');
       cookies.remove('user_jwt_token');
-      localStorage.clear();
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user_jwt_token');
+      localStorage.removeItem('doctorId');
+      localStorage.removeItem('isUserLogin');
       window.location.href = '/login'; // Redirect to login
     }
     return Promise.reject(error);

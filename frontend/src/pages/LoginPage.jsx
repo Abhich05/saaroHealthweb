@@ -42,15 +42,21 @@ const LoginPage = () => {
             localStorage.setItem('doctorId', doctorId);
             localStorage.setItem('isUserLogin', 'false'); // Mark as doctor login
             
-            // Store JWT token in localStorage as fallback
+            // Store JWT token from response body
+            if (res.data.accessToken) {
+              localStorage.setItem('jwt_token', res.data.accessToken);
+              console.log('JWT token stored in localStorage from response');
+            }
+            
+            // Also try to get from cookie as backup
             const jwtToken = document.cookie
               .split('; ')
               .find(row => row.startsWith('jwt_token='))
               ?.split('=')[1];
             
-            if (jwtToken) {
+            if (jwtToken && !res.data.accessToken) {
               localStorage.setItem('jwt_token', jwtToken);
-              console.log('JWT token stored in localStorage as fallback');
+              console.log('JWT token stored in localStorage from cookie');
             }
             
             console.log('doctorId set:', doctorId); // Debug statement

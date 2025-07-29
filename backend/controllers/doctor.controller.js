@@ -46,12 +46,15 @@ const loginDoctor = async (req, res) => {
       .cookie('jwt_token', doctor.doctor.accessToken, {
         httpOnly: false, // Allow JavaScript access
         secure: false, // Allow HTTP in development
-        sameSite: 'lax',
+        sameSite: 'none', // Allow cross-origin
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       })
       .status(doctor.statusCode)
-      .json({ doctorId: doctor.doctor.id });
+      .json({ 
+        doctorId: doctor.doctor.id,
+        accessToken: doctor.doctor.accessToken // Also send token in response body
+      });
       
     console.log('Cookie set successfully');
   } catch(error) {
