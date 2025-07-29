@@ -26,26 +26,36 @@ const registerDoctor = async (req, res) => {
 const loginDoctor = async (req, res) => {
   try {
     const doctorData = req.body;
+    console.log('=== DOCTOR LOGIN DEBUG ===');
+    console.log('Login request for email:', doctorData.email);
 
     const doctor = await doctorService.loginDoctor(doctorData);
     if (doctor?.error) {
+      console.log('Login failed:', doctor.error);
       return res
         .status(doctor.statusCode)
         .send(doctor.error);
     }
 
+    console.log('Login successful, setting cookie');
+    console.log('Access token:', doctor.doctor.accessToken ? 'Present' : 'Missing');
+    console.log('Doctor ID:', doctor.doctor.id);
+
     // Set JWT as cookie (not httpOnly so frontend can access it)
     res
       .cookie('jwt_token', doctor.doctor.accessToken, {
         httpOnly: false, // Allow JavaScript access
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Allow HTTP in development
         sameSite: 'lax',
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       })
       .status(doctor.statusCode)
       .json({ doctorId: doctor.doctor.id });
+      
+    console.log('Cookie set successfully');
   } catch(error) {
+    console.log('Login error:', error);
     res
       .status(500)
       .send(`Error: ${error}`);

@@ -41,6 +41,18 @@ const LoginPage = () => {
           if (doctorId) {
             localStorage.setItem('doctorId', doctorId);
             localStorage.setItem('isUserLogin', 'false'); // Mark as doctor login
+            
+            // Store JWT token in localStorage as fallback
+            const jwtToken = document.cookie
+              .split('; ')
+              .find(row => row.startsWith('jwt_token='))
+              ?.split('=')[1];
+            
+            if (jwtToken) {
+              localStorage.setItem('jwt_token', jwtToken);
+              console.log('JWT token stored in localStorage as fallback');
+            }
+            
             console.log('doctorId set:', doctorId); // Debug statement
             navigate('/'); // Navigate to dashboard instead of reloading
           }

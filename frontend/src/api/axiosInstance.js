@@ -38,6 +38,14 @@ axiosInstance.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log('Added doctor JWT to Authorization header');
+      } else {
+        // Fallback: try to get from localStorage if cookie is missing
+        const fallbackToken = localStorage.getItem('jwt_token');
+        console.log('Fallback JWT token:', fallbackToken ? 'Present' : 'Missing');
+        if (fallbackToken) {
+          config.headers.Authorization = `Bearer ${fallbackToken}`;
+          console.log('Added fallback JWT to Authorization header');
+        }
       }
     }
     
