@@ -64,9 +64,14 @@ const Document = () => {
       .then(res => {
         setData(Array.isArray(res.data.documents) ? res.data.documents : []);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Error fetching documents:', err);
         setData([]);
-        setError("Failed to fetch documents. Please try again.");
+        if (err.response?.status === 500) {
+          setError("Document service is not available. Please contact administrator or try again later.");
+        } else {
+          setError("Failed to fetch documents. Please try again.");
+        }
       })
       .finally(() => setLoading(false));
   }, [doctorId]);
