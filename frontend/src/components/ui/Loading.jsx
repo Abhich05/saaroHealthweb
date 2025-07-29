@@ -1,118 +1,118 @@
 import React, { useState, useEffect } from "react";
 
 const Loading = () => {
-  const [currentTagline, setCurrentTagline] = useState(0);
-  
-  const medicalTaglines = [
-    "Caring for your health with precision and compassion",
-    "Advanced medical technology at your fingertips",
-    "Your health journey starts with us",
-    "Empowering healthcare professionals worldwide",
-    "Where innovation meets patient care",
-    "Streamlining healthcare for better outcomes",
-    "Your trusted partner in medical excellence",
-    "Transforming healthcare delivery"
-  ];
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTagline((prev) => (prev + 1) % medicalTaglines.length);
-    }, 3000);
-
-    return () => clearInterval(interval);
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
-      {/* Logo Section */}
-      <div className="mb-8">
-        <img 
-          src="/saaro-health2.png" 
-          alt="Saaro Health Logo" 
-          className="w-32 h-32 mb-4 animate-pulse" 
-        />
-      </div>
+    <div className={`min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 transition-all duration-1000 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      {/* Page Animation Overlay */}
+      <div className={`fixed inset-0 bg-white z-50 transition-transform duration-1000 ease-out ${isVisible ? 'translate-x-full' : 'translate-x-0'}`}></div>
+      
+      <div className="flex flex-col items-center justify-center min-h-screen relative z-10">
+        {/* Logo with Fade In Animation */}
+        <div className={`mb-12 transition-all duration-1000 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <img 
+            src="/saaro-health2.png" 
+            alt="Saaro Health Logo" 
+            className="w-28 h-28 animate-pulse" 
+          />
+        </div>
 
-      {/* Skeleton Loader */}
-      <div className="w-full max-w-md space-y-4 mb-8">
-        {/* Main skeleton card */}
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-100">
-          {/* Header skeleton */}
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
-            <div className="flex-1 space-y-2">
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+        {/* Main Skeleton Container */}
+        <div className={`w-full max-w-4xl px-4 transition-all duration-1000 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          {/* Header Skeleton */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="space-y-2">
+                  <div className="h-5 bg-gray-200 rounded animate-pulse w-32"></div>
+                  <div className="h-3 bg-gray-200 rounded animate-pulse w-24"></div>
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            
+            {/* Navigation Skeleton */}
+            <div className="flex space-x-6 mb-6">
+              {[1, 2, 3, 4, 5].map((item) => (
+                <div key={item} className="h-4 bg-gray-200 rounded animate-pulse w-16"></div>
+              ))}
             </div>
           </div>
 
-          {/* Content skeleton */}
-          <div className="space-y-3">
-            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6"></div>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-4/6"></div>
+          {/* Content Grid Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            {/* KPI Cards */}
+            {[1, 2, 3].map((card) => (
+              <div key={card} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-10 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                  <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div>
+                  <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+                  <div className="h-3 bg-gray-200 rounded animate-pulse w-24"></div>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Action buttons skeleton */}
-          <div className="flex space-x-3 mt-6">
-            <div className="h-10 bg-gray-200 rounded-lg animate-pulse flex-1"></div>
-            <div className="h-10 bg-gray-200 rounded-lg animate-pulse flex-1"></div>
+          {/* Table Skeleton */}
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            {/* Table Header */}
+            <div className="px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="h-6 bg-gray-200 rounded animate-pulse w-32"></div>
+                <div className="h-8 bg-gray-200 rounded-lg animate-pulse w-24"></div>
+              </div>
+            </div>
+            
+            {/* Table Content */}
+            <div className="p-6">
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="h-10 bg-gray-200 rounded-lg animate-pulse w-full"></div>
+              </div>
+              
+              {/* Table Rows */}
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((row) => (
+                  <div key={row} className="flex items-center space-x-4 py-3 border-b border-gray-50 last:border-b-0">
+                    <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                      <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <div className="w-16 h-6 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="w-16 h-6 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Secondary skeleton cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg shadow p-4 border border-gray-100">
-            <div className="h-3 bg-gray-200 rounded animate-pulse mb-2"></div>
-            <div className="h-6 bg-gray-200 rounded animate-pulse w-2/3"></div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 border border-gray-100">
-            <div className="h-3 bg-gray-200 rounded animate-pulse mb-2"></div>
-            <div className="h-6 bg-gray-200 rounded animate-pulse w-2/3"></div>
+        {/* Loading Indicator */}
+        <div className={`mt-8 transition-all duration-1000 delay-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
           </div>
         </div>
-      </div>
-
-      {/* Loading Spinner */}
-      <div className="relative mb-6">
-        <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-        <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-t-purple-400 rounded-full animate-spin" style={{ animationDelay: '0.5s' }}></div>
-      </div>
-
-      {/* Tagline Section */}
-      <div className="text-center max-w-lg px-4">
-        <h2 className="text-xl font-semibold text-gray-800 mb-3">
-          Loading Saaro Health
-        </h2>
-        <div className="h-6 mb-2">
-          <p className="text-gray-600 text-sm transition-opacity duration-500">
-            {medicalTaglines[currentTagline]}
-          </p>
-        </div>
-        <div className="flex justify-center space-x-1">
-          {medicalTaglines.map((_, index) => (
-            <div
-              key={index}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                index === currentTagline 
-                  ? 'bg-purple-600 scale-125' 
-                  : 'bg-gray-300'
-              }`}
-            ></div>
-          ))}
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="w-64 bg-gray-200 rounded-full h-1 mt-6">
-        <div className="bg-gradient-to-r from-purple-500 to-blue-500 h-1 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-      </div>
-
-      {/* Footer */}
-      <div className="mt-8 text-center">
-        <p className="text-xs text-gray-500">
-          Powered by advanced healthcare technology
-        </p>
       </div>
     </div>
   );
