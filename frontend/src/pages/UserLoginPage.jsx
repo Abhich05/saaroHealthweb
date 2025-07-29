@@ -31,6 +31,7 @@ const UserLoginPage = () => {
     if (Object.keys(newErrors).length === 0) {
       try {
         console.log('Attempting login with:', { email, password: '***' });
+        console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
         
         const res = await axiosInstance.post("/user/login", {
           email,
