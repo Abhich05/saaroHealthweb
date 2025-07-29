@@ -14,10 +14,9 @@ router.put('/change-password', userMiddleware, userController.changePassword);
 router.put('/profile', userMiddleware, userController.updateProfile);
 
 // Doctor-only routes (require doctor authentication)
-// For now, let's use a simpler approach without the complex doctor middleware
-router.get('/', userController.getUsersByDoctor);
-router.post('/', userController.createUser);
-router.put('/:userId', userController.updateUser);
-router.delete('/:userId', userController.deleteUser);
+router.get('/', doctorMiddleware, userController.getUsersByDoctor);
+router.post('/', doctorMiddleware, userController.createUser);
+router.put('/:userId', doctorMiddleware, userController.updateUser);
+router.delete('/:userId', doctorMiddleware, userController.deleteUser);
 
 module.exports = router; 

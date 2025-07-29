@@ -83,7 +83,6 @@ const Settings = () => {
             
             setAvatarPreview(URL.createObjectURL(file));
             setAvatarFileName(file.name);
-            console.log('Avatar file selected:', file.name, file.size, file.type);
         }
     };
     const removeAvatar = () => {
@@ -240,34 +239,23 @@ const Settings = () => {
             // Add avatar if changed
             if (avatarPreview && avatarPreview.startsWith('blob:')) {
                 try {
-                    console.log('=== AVATAR UPLOAD DEBUG ===');
-                    console.log('Avatar preview:', avatarPreview);
-                    console.log('Avatar filename:', avatarFileName);
-                    
                     // Convert blob URL to file
                     const response = await fetch(avatarPreview);
                     const blob = await response.blob();
                     const file = new File([blob], avatarFileName, { type: blob.type });
                     
-                    console.log('File created:', file.name, file.size, file.type);
-                    
                     // Upload avatar
                     const formData = new FormData();
                     formData.append('avatar', file);
                     
-                    console.log('Uploading avatar to /fileUploader/avatar...');
                     const uploadResponse = await axiosInstance.post('/fileUploader/avatar', formData, {
                         headers: {
                             'Content-Type': 'multipart/form-data',
                         },
                     });
                     
-                    console.log('Upload response:', uploadResponse.data);
                     profileData.avatar = uploadResponse.data.avatarUrl;
-                    console.log('Avatar uploaded successfully:', uploadResponse.data.avatarUrl);
                 } catch (uploadError) {
-                    console.error('Error uploading avatar:', uploadError);
-                    console.error('Upload error response:', uploadError.response?.data);
                     toast.error('Failed to upload avatar. Profile updated without avatar.');
                 }
             }
@@ -276,44 +264,26 @@ const Settings = () => {
             if (isUserLogin) {
                 // Update user profile
                 endpoint = '/user/profile';
-                console.log('Using USER profile endpoint');
             } else {
                 // Update doctor profile
                 endpoint = `/doctor/${doctorId}/profile`;
-                console.log('Using DOCTOR profile endpoint');
             }
             
-            console.log('Using endpoint:', endpoint);
-            console.log('Sending profile data:', profileData);
-            console.log('Profile data includes avatar:', !!profileData.avatar);
-            console.log('About to make API call...');
-            
             const response = await axiosInstance.put(endpoint, profileData);
-            
-            console.log('Save profile response:', response.data);
             
             toast.success('Profile updated successfully!');
             
             // Update localStorage with new name if it changed
             if (isUserLogin) {
                 localStorage.setItem('userName', profileData.name);
-                console.log('Updated userName in localStorage:', profileData.name);
             } else {
                 localStorage.setItem('doctorName', profileData.name);
-                console.log('Updated doctorName in localStorage:', profileData.name);
             }
             
             // Trigger a page refresh to update the header
-            console.log('Reloading page to update header...');
             window.location.reload();
             
         } catch (error) {
-            console.error('=== SAVE PROFILE ERROR ===');
-            console.error('Error object:', error);
-            console.error('Error response:', error.response);
-            console.error('Error response data:', error.response?.data);
-            console.error('Error status:', error.response?.status);
-            
             const errorMessage = error.response?.data?.error || 'Failed to update profile';
             toast.error(errorMessage);
         } finally {

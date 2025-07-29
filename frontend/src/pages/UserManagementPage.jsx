@@ -123,14 +123,7 @@ const UserManagementPage = () => {
         avatar: selectedUser.avatar
       };
       
-      console.log('Adding new user with data:', { ...userData, password: '***' });
-      console.log('Doctor ID:', doctorId);
-      console.log('Is user login:', localStorage.getItem('isUserLogin'));
-      console.log('JWT token cookie:', document.cookie);
-      
       const res = await axiosInstance.post(`/${doctorId}/users`, userData);
-      
-      console.log('Add user response:', res.data);
       
       // Show credentials modal
       setNewUserCredentials({
