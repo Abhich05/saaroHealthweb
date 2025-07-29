@@ -66,7 +66,21 @@ const createUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log('Password hashed successfully for user:', name);
     
-    const user = new User({ name, email, password: hashedPassword, role, permissions, avatar, phone, doctorId });
+    // Set default permissions if none provided
+    let defaultPermissions = permissions;
+    if (!permissions || Object.keys(permissions).length === 0) {
+      defaultPermissions = {
+        dashboard: 'read',
+        allPatients: 'read',
+        patientQueue: 'read',
+        appointments: 'read',
+        messages: 'read',
+        settings: 'read'
+      };
+      console.log('Setting default permissions for user:', name, defaultPermissions);
+    }
+    
+    const user = new User({ name, email, password: hashedPassword, role, permissions: defaultPermissions, avatar, phone, doctorId });
     await user.save();
     
     console.log('User created successfully:', user._id);
@@ -181,6 +195,24 @@ const loginUser = async (req, res) => {
     const accessToken = getAccessToken(user);
     console.log('Generated access token for user:', user.name);
 
+    // Ensure user has default permissions if none are set
+    let userPermissions = user.permissions;
+    if (!userPermissions || Object.keys(userPermissions).length === 0) {
+      userPermissions = {
+        dashboard: 'read',
+        allPatients: 'read',
+        patientQueue: 'read',
+        appointments: 'read',
+        messages: 'read',
+        settings: 'read'
+      };
+      
+      // Update user with default permissions
+      user.permissions = userPermissions;
+      await user.save();
+      console.log('Updated user with default permissions:', user.name);
+    }
+    
     res
       .cookie('user_jwt_token', accessToken, {
         httpOnly: false, // Allow JavaScript access
@@ -196,7 +228,7 @@ const loginUser = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
-          permissions: user.permissions,
+          permissions: userPermissions,
           doctorId: user.doctorId._id,
           doctorName: user.doctorId.name,
           clinicName: user.doctorId.clinicName
@@ -233,13 +265,31 @@ const getCurrentUser = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    // Ensure user has default permissions if none are set
+    let userPermissions = user.permissions;
+    if (!userPermissions || Object.keys(userPermissions).length === 0) {
+      userPermissions = {
+        dashboard: 'read',
+        allPatients: 'read',
+        patientQueue: 'read',
+        appointments: 'read',
+        messages: 'read',
+        settings: 'read'
+      };
+      
+      // Update user with default permissions
+      user.permissions = userPermissions;
+      await user.save();
+      console.log('Updated user with default permissions in getCurrentUser:', user.name);
+    }
+    
     res.status(200).json({
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        permissions: user.permissions,
+        permissions: userPermissions,
         doctorId: user.doctorId._id,
         doctorName: user.doctorId.name,
         clinicName: user.doctorId.clinicName,

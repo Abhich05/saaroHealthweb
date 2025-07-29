@@ -13,7 +13,8 @@ const ProtectedRoute = ({ children }) => {
     doctorId: doctorId ? 'Present' : 'Missing', 
     userId: userId ? 'Present' : 'Missing', 
     isUserLogin, 
-    isAuthenticated 
+    isAuthenticated,
+    userPermissions: localStorage.getItem('userPermissions')
   });
 
   if (!isAuthenticated) {

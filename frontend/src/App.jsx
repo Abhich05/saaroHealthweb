@@ -71,6 +71,34 @@ function App() {
         };
         setUser(userData);
         setDoctorName(userData.doctorName);
+        
+        // Optionally fetch fresh user data from server
+        try {
+          const res = await axiosInstance.get('/user/me');
+          if (res.data && res.data.user) {
+            const freshUserData = {
+              id: res.data.user.id,
+              name: res.data.user.name,
+              role: res.data.user.role,
+              permissions: res.data.user.permissions,
+              doctorId: res.data.user.doctorId,
+              doctorName: res.data.user.doctorName,
+              clinicName: res.data.user.clinicName
+            };
+            setUser(freshUserData);
+            setDoctorName(freshUserData.doctorName);
+            
+            // Update localStorage with fresh data
+            localStorage.setItem('userName', freshUserData.name);
+            localStorage.setItem('userRole', freshUserData.role);
+            localStorage.setItem('userPermissions', JSON.stringify(freshUserData.permissions));
+            localStorage.setItem('doctorName', freshUserData.doctorName);
+            localStorage.setItem('clinicName', freshUserData.clinicName);
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Don't redirect on error, just use localStorage data
+        }
       } else if (doctorId) {
         // Set doctor context for doctor login
         try {
@@ -96,13 +124,87 @@ function App() {
     };
 
     loadUserData();
-  }, [doctorId]);
+  }, []); // Remove doctorId dependency to prevent re-triggering on staff login
 
   // Listen for storage changes (when user logs in/out)
   useEffect(() => {
     const handleStorageChange = (e) => {
-      if (e.key === 'doctorId') {
-        setDoctorId(e.newValue);
+      if (e.key === 'doctorId' || e.key === 'userId' || e.key === 'isUserLogin') {
+        // Reload user data when authentication state changes
+        const loadUserData = async () => {
+          setIsLoading(true);
+          
+          const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+          
+          if (isUserLogin) {
+            const userData = {
+              id: localStorage.getItem('userId'),
+              name: localStorage.getItem('userName'),
+              role: localStorage.getItem('userRole'),
+              permissions: JSON.parse(localStorage.getItem('userPermissions') || '{}'),
+              doctorId: localStorage.getItem('doctorId'),
+              doctorName: localStorage.getItem('doctorName'),
+              clinicName: localStorage.getItem('clinicName')
+            };
+            setUser(userData);
+            setDoctorName(userData.doctorName);
+            setDoctorId(userData.doctorId);
+            
+            // Optionally fetch fresh user data from server
+            try {
+              const res = await axiosInstance.get('/user/me');
+              if (res.data && res.data.user) {
+                const freshUserData = {
+                  id: res.data.user.id,
+                  name: res.data.user.name,
+                  role: res.data.user.role,
+                  permissions: res.data.user.permissions,
+                  doctorId: res.data.user.doctorId,
+                  doctorName: res.data.user.doctorName,
+                  clinicName: res.data.user.clinicName
+                };
+                setUser(freshUserData);
+                setDoctorName(freshUserData.doctorName);
+                
+                // Update localStorage with fresh data
+                localStorage.setItem('userName', freshUserData.name);
+                localStorage.setItem('userRole', freshUserData.role);
+                localStorage.setItem('userPermissions', JSON.stringify(freshUserData.permissions));
+                localStorage.setItem('doctorName', freshUserData.doctorName);
+                localStorage.setItem('clinicName', freshUserData.clinicName);
+              }
+            } catch (error) {
+              console.error('Error fetching user data:', error);
+              // Don't redirect on error, just use localStorage data
+            }
+          } else {
+            const newDoctorId = localStorage.getItem('doctorId');
+            setDoctorId(newDoctorId);
+            setUser(null);
+            
+            if (newDoctorId) {
+              try {
+                const res = await axiosInstance.get(`/doctor/${newDoctorId}`);
+                const doctorName = res.data.doctor?.name || '';
+                setDoctorName(doctorName);
+                
+                if (doctorName) {
+                  localStorage.setItem('doctorName', doctorName);
+                }
+              } catch (error) {
+                console.error('Error fetching doctor data:', error);
+                setDoctorName('');
+                localStorage.removeItem('doctorId');
+                localStorage.removeItem('doctorName');
+                localStorage.removeItem('jwt_token');
+              }
+            }
+          }
+          
+          setIsLoading(false);
+        };
+        
+        loadUserData();
       }
     };
 

@@ -24,12 +24,31 @@ const RoleProtectedRoute = ({ children, requiredPermission }) => {
       if (isUser && userPermissions) {
         try {
           const permissions = JSON.parse(userPermissions);
+          console.log('RoleProtectedRoute - User permissions:', permissions);
+          console.log('RoleProtectedRoute - Required permission:', requiredPermission);
+          
+          // Check if user has the required permission
           const hasRequiredPermission = permissions[requiredPermission] && 
             permissions[requiredPermission] !== 'none';
-          setHasPermission(hasRequiredPermission);
+          
+          console.log('RoleProtectedRoute - Has required permission:', hasRequiredPermission);
+          
+          // If no permissions are set (empty object), give basic access to dashboard
+          if (Object.keys(permissions).length === 0 && requiredPermission === 'dashboard') {
+            console.log('RoleProtectedRoute - No permissions set, allowing dashboard access');
+            setHasPermission(true);
+          } else {
+            setHasPermission(hasRequiredPermission);
+          }
         } catch (error) {
           console.error('Error parsing permissions:', error);
-          setHasPermission(false);
+          // If there's an error parsing permissions, allow dashboard access
+          if (requiredPermission === 'dashboard') {
+            console.log('RoleProtectedRoute - Error parsing permissions, allowing dashboard access');
+            setHasPermission(true);
+          } else {
+            setHasPermission(false);
+          }
         }
       } else {
         // Doctor login - has full access

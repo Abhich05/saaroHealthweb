@@ -57,14 +57,34 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear tokens on unauthorized access
-      cookies.remove('jwt_token');
-      cookies.remove('user_jwt_token');
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_jwt_token');
-      localStorage.removeItem('doctorId');
-      localStorage.removeItem('isUserLogin');
-      window.location.href = '/login'; // Redirect to login
+      // Only redirect to login if it's a token authentication issue
+      // Don't redirect for permission-based 401 errors
+      const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+      
+      // Check if this is a token issue or permission issue
+      if (error.response.data && error.response.data.error && 
+          (error.response.data.error.includes('token') || 
+           error.response.data.error.includes('unauthorized') ||
+           error.response.data.error.includes('Access token required'))) {
+        
+        // Clear tokens on unauthorized access
+        cookies.remove('jwt_token');
+        cookies.remove('user_jwt_token');
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('user_jwt_token');
+        localStorage.removeItem('doctorId');
+        localStorage.removeItem('isUserLogin');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userPermissions');
+        localStorage.removeItem('doctorName');
+        localStorage.removeItem('clinicName');
+        
+        // Redirect to appropriate login page
+        const redirectPath = isUserLogin ? '/user-login' : '/login';
+        window.location.href = redirectPath;
+      }
     }
     return Promise.reject(error);
   }
