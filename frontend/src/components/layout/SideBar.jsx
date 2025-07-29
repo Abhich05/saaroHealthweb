@@ -39,7 +39,7 @@ const Sidebar = () => {
       { name: "Automation", icon: <img src="/automation.svg" alt="Automation" style={{ width: "20px", height: "20px" }} />, to: "/automation", permission: "automation" },
       { name: "More" },
       { name: "Library", icon: <img src="/library.svg" alt="Library" style={{ width: "20px", height: "20px" }} />, permission: "library" },
-      { name: "User", icon: <img src="/user.svg" alt="User" style={{ width: "20px", height: "20px" }} />, to: "/user", permission: "userManagement" },
+      { name: "User", icon: <img src="/user.svg" alt="User" style={{ width: "20px", height: "20px" }} />, to: "/user", permission: "settings" },
       { name: "Settings", icon: <img src="/automation.svg" alt="Settings" style={{ width: "20px", height: "20px" }} />, to: "/settings", permission: null }, // No permission required - accessible to all
     ];
 

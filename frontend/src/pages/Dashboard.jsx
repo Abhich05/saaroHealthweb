@@ -13,6 +13,7 @@ import Pagination from "../components/ui/Pagination";
 
 import axiosInstance from '../api/axiosInstance';
 import { DoctorIdContext, DoctorNameContext } from '../App';
+import RouteDebug from '../components/RouteDebug';
 
 const columns = [
   { label: "Patient Name", accessor: "name" },
@@ -213,6 +214,9 @@ const Dashboard = () => {
 
           {/* AI Modal */}
           {showAiModal && <AiModal onClose={() => setShowAiModal(false)} />}
+          
+          {/* Route Debug Component */}
+          <RouteDebug />
         </main>
       </div>
     </div>
