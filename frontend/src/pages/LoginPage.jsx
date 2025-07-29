@@ -3,9 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header2 from "../components/layout/Header2";
 import Button from "../components/ui/Button";
 import axiosInstance from "../api/axiosInstance";
-import EnvTest from "../components/EnvTest";
-import LoginTest from "../components/LoginTest";
-import AuthDebug from "../components/AuthDebug";
+
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -33,9 +31,6 @@ const LoginPage = () => {
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        console.log('Attempting doctor login with:', { email, password: '***' });
-        console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
-        
         const res = await axiosInstance.post("/doctor/access-token", {
           email,
           password,
@@ -51,8 +46,6 @@ const LoginPage = () => {
           }
         }
       } catch (err) {
-        console.error('Doctor login error:', err);
-        console.error('Error response:', err.response?.data);
         setSubmitError(err.response?.data?.error || "Login failed. Please try again.");
       }
     }
@@ -69,9 +62,6 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen bg-white flex flex-col relative overflow-hidden">
       <Header2 />
-      <EnvTest />
-      <LoginTest />
-      <AuthDebug />
 
       <div className="flex flex-1 relative">
         {/* Left form section */}

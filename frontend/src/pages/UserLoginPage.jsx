@@ -30,15 +30,10 @@ const UserLoginPage = () => {
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        console.log('Attempting login with:', { email, password: '***' });
-        console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
-        
         const res = await axiosInstance.post("/user/login", {
           email,
           password,
         });
-        
-        console.log('Login response:', res.data);
         
         if (res.data && res.data.user) {
           // Store user information
@@ -51,12 +46,9 @@ const UserLoginPage = () => {
           localStorage.setItem('clinicName', res.data.user.clinicName);
           localStorage.setItem('isUserLogin', 'true');
           
-          console.log('User logged in successfully:', res.data.user);
           navigate('/'); // Navigate to dashboard
         }
       } catch (err) {
-        console.error('Login error:', err);
-        console.error('Error response:', err.response?.data);
         setSubmitError(err.response?.data?.error || "Login failed. Please try again.");
       }
     }

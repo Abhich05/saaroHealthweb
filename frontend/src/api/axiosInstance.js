@@ -5,8 +5,6 @@ import cookies from 'js-cookie';
 // Make sure VITE_API_BASE_URL is set correctly in your .env file
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.onrender.com/api';
 
-console.log('API Base URL:', baseURL); // Debug log
-
 const axiosInstance = axios.create({
   baseURL: baseURL,
   withCredentials: true, // IF you plan to use cookies in some cases
