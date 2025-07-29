@@ -175,18 +175,75 @@ const Document = () => {
   };
 
   const handlePrint = (document) => {
-    // Open document in new window for printing
-    window.open(document.fileUrl, '_blank');
+    try {
+      // For PDF files, open in new window for printing
+      if (document.mimeType === 'application/pdf') {
+        window.open(document.fileUrl, '_blank');
+      } else {
+        // For other file types, create a print-friendly page
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Print Document - ${document.name}</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .info { margin-bottom: 20px; }
+                .info p { margin: 5px 0; }
+                .document-link { margin-top: 20px; text-align: center; }
+                .document-link a { color: blue; text-decoration: underline; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Document: ${document.name}</h1>
+              </div>
+              <div class="info">
+                <p><strong>Patient Name:</strong> ${document.patientName}</p>
+                <p><strong>Document Type:</strong> ${document.type}</p>
+                <p><strong>Upload Date:</strong> ${new Date(document.createdAt).toLocaleDateString()}</p>
+                <p><strong>File Size:</strong> ${(document.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+              </div>
+              <div class="document-link">
+                <p><strong>Document URL:</strong></p>
+                <a href="${document.fileUrl}" target="_blank">${document.fileUrl}</a>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    } catch (error) {
+      console.error('Error printing document:', error);
+      alert('Error printing document. Please try downloading and printing manually.');
+    }
   };
 
   const handleDownload = (document) => {
-    // Create a temporary link to download the file
-    const link = document.createElement('a');
-    link.href = document.fileUrl;
-    link.download = document.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Create a temporary link to download the file
+      const link = document.createElement('a');
+      link.href = document.fileUrl;
+      link.download = document.name;
+      link.target = '_blank';
+      
+      // Add file extension if missing
+      if (!document.name.includes('.')) {
+        const extension = document.mimeType === 'application/pdf' ? '.pdf' : 
+                         document.mimeType.startsWith('image/') ? '.jpg' : '.doc';
+        link.download = document.name + extension;
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      // Fallback: open in new tab
+      window.open(document.fileUrl, '_blank');
+    }
   };
 
   const handleCancel = () => {
@@ -413,22 +470,75 @@ const Document = () => {
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
         title="View Document"
+        size="lg"
       >
         {selectedDocument && (
           <div className="space-y-4">
-            <div>
-              <strong>Document Name:</strong> {selectedDocument.name}
+            {/* Document Info */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <strong>Document Name:</strong> {selectedDocument.name}
+              </div>
+              <div>
+                <strong>Patient Name:</strong> {selectedDocument.patientName}
+              </div>
+              <div>
+                <strong>Document Type:</strong> {selectedDocument.type}
+              </div>
+              <div>
+                <strong>Upload Date:</strong> {new Date(selectedDocument.createdAt).toLocaleDateString()}
+              </div>
+              <div>
+                <strong>File Size:</strong> {(selectedDocument.fileSize / 1024 / 1024).toFixed(2)} MB
+              </div>
+              <div>
+                <strong>File Type:</strong> {selectedDocument.mimeType}
+              </div>
             </div>
-            <div>
-              <strong>Patient Name:</strong> {selectedDocument.patientName}
+
+            {/* Document Preview */}
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-2">Document Preview:</h3>
+              <div className="border rounded-lg p-4 bg-gray-50 min-h-[400px] max-h-[500px] overflow-auto">
+                {selectedDocument.mimeType === 'application/pdf' ? (
+                  <iframe
+                    src={selectedDocument.fileUrl}
+                    width="100%"
+                    height="400"
+                    title="Document Preview"
+                    className="border-0"
+                  />
+                ) : selectedDocument.mimeType.startsWith('image/') ? (
+                  <img
+                    src={selectedDocument.fileUrl}
+                    alt={selectedDocument.name}
+                    className="max-w-full h-auto mx-auto"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'block';
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600 mb-4">
+                      Preview not available for this file type ({selectedDocument.mimeType})
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Please download the file to view its contents.
+                    </p>
+                  </div>
+                )}
+                <div className="text-center py-8" style={{ display: 'none' }}>
+                  <p className="text-red-600 mb-4">Failed to load document preview</p>
+                  <p className="text-sm text-gray-500">
+                    The document may be corrupted or the URL is invalid.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <strong>Document Type:</strong> {selectedDocument.type}
-            </div>
-            <div>
-              <strong>Upload Date:</strong> {new Date(selectedDocument.createdAt).toLocaleDateString()}
-            </div>
-            <div className="flex justify-end space-x-3">
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
               <Button
                 onClick={() => handleDownload(selectedDocument)}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
