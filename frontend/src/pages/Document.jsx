@@ -14,7 +14,7 @@ const columns = [
   { label: "Document Name", accessor: "name" },
   { label: "Patient Name", accessor: "patientName" },
   { label: "Document Type", accessor: "type" },
-  { label: "Upload Date", accessor: "uploadDate" },
+  { label: "Upload Date", accessor: "createdAt" },
   { label: "Actions", accessor: "actions" },
 ];
 
@@ -226,36 +226,56 @@ const Document = () => {
             <GenericTable
               data={paginatedData}
               columns={columns}
-              onEdit={handleEdit}
-              onDelete={(index) => {
-                setDeleteIndex(index);
-                setIsDeleteModalOpen(true);
+              renderCell={(row, accessor) => {
+                if (accessor === "createdAt") {
+                  return new Date(row.createdAt).toLocaleDateString();
+                }
+                if (accessor === "actions") {
+                  return (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleView(row)}
+                        className="p-1 text-blue-600 hover:text-blue-800"
+                        title="View"
+                      >
+                        <FiEye size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDownload(row)}
+                        className="p-1 text-green-600 hover:text-green-800"
+                        title="Download"
+                      >
+                        <FiDownload size={16} />
+                      </button>
+                      <button
+                        onClick={() => handlePrint(row)}
+                        className="p-1 text-purple-600 hover:text-purple-800"
+                        title="Print"
+                      >
+                        <FiPrinter size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(paginatedData.indexOf(row))}
+                        className="p-1 text-orange-600 hover:text-orange-800"
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteIndex(paginatedData.indexOf(row));
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="p-1 text-red-600 hover:text-red-800"
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
               }}
-              customActions={(item, index) => (
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleView(item)}
-                    className="p-1 text-blue-600 hover:text-blue-800"
-                    title="View"
-                  >
-                    <FiEye size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDownload(item)}
-                    className="p-1 text-green-600 hover:text-green-800"
-                    title="Download"
-                  >
-                    <FiDownload size={16} />
-                  </button>
-                  <button
-                    onClick={() => handlePrint(item)}
-                    className="p-1 text-purple-600 hover:text-purple-800"
-                    title="Print"
-                  >
-                    <FiPrinter size={16} />
-                  </button>
-                </div>
-              )}
             />
 
             {totalPages > 1 && (
