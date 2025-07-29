@@ -34,10 +34,10 @@ const loginDoctor = async (req, res) => {
         .send(doctor.error);
     }
 
-    // Set JWT as httpOnly cookie
+    // Set JWT as cookie (not httpOnly so frontend can access it)
     res
       .cookie('jwt_token', doctor.doctor.accessToken, {
-        httpOnly: true,
+        httpOnly: false, // Allow JavaScript access
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',

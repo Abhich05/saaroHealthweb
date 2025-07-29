@@ -173,7 +173,7 @@ const loginUser = async (req, res) => {
 
     res
       .cookie('user_jwt_token', accessToken, {
-        httpOnly: true,
+        httpOnly: false, // Allow JavaScript access
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
@@ -204,7 +204,7 @@ const logoutUser = async (req, res) => {
   try {
     res
       .clearCookie('user_jwt_token', {
-        httpOnly: true,
+        httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/'

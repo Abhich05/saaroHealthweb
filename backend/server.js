@@ -35,12 +35,22 @@ const indexRoutes = require('./routes/index.routes');
 app.use('/api', indexRoutes);
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('jwt_token', { path: '/' });
+  res.clearCookie('jwt_token', { 
+    path: '/',
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  });
   res.status(200).json({ message: 'Logged out' });
 });
 
 app.post('/api/user/logout', (req, res) => {
-  res.clearCookie('user_jwt_token', { path: '/' });
+  res.clearCookie('user_jwt_token', { 
+    path: '/',
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  });
   res.status(200).json({ message: 'Logged out' });
 });
 
