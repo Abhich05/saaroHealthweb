@@ -126,7 +126,7 @@ const changePassword = async (req, res) => {
     }
 
     // Verify current password
-    const bcrypt = require('bcrypt');
+    const bcrypt = require('bcryptjs');
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, doctor.password);
     if (!isCurrentPasswordValid) {
       console.log('Invalid current password for doctor:', doctor.name);

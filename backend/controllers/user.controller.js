@@ -1,5 +1,5 @@
 const User = require('../models/user');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { validateUser } = require('../validations/userValidation');
 const { getAccessToken, verifyAccessToken } = require('../utils/helpers');
 
