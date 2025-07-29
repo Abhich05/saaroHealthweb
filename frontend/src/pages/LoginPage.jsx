@@ -31,6 +31,14 @@ const LoginPage = () => {
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
+        // Clear any stale data before login
+        localStorage.removeItem('doctorName');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userPermissions');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('clinicName');
+        
         const res = await axiosInstance.post("/doctor/access-token", {
           email,
           password,
@@ -60,7 +68,9 @@ const LoginPage = () => {
             }
             
             console.log('doctorId set:', doctorId); // Debug statement
-            navigate('/'); // Navigate to dashboard instead of reloading
+            
+            // Force a page reload to ensure fresh data loading
+            window.location.href = '/';
           }
         }
       } catch (err) {

@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useContext } from "react";
-import { FiSearch } from "react-icons/fi";
+import { FiSearch, FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import GenericTable from "../components/ui/GenericTable";
 import axiosInstance from '../api/axiosInstance';
 import Button from "../components/ui/Button";
-import Modal from '../components/ui/GenericModal'; // adjust path as needed
-import Pagination from "../components/ui/Pagination"; // ✅ Import pagination
+import Modal from '../components/ui/GenericModal';
+import Pagination from "../components/ui/Pagination";
 import { DoctorIdContext } from '../App';
 import Loading from "../components/ui/Loading";
 
 const columns = [
-  { label: "Name", accessor: "name" },
+  { label: "Medicine Name", accessor: "name" },
   { label: "Composition", accessor: "composition" },
   { label: "Frequency", accessor: "frequency" },
   { label: "Dosage", accessor: "dosage" },
@@ -41,49 +41,63 @@ const Medicines = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6;
+  const pageSize = 10;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const doctorId = useContext(DoctorIdContext);
 
-  useEffect(() => {
+  // Fetch medicines
+  const fetchMedicines = async () => {
     if (!doctorId) return;
-    setLoading(true);
-    setError("");
-    axiosInstance.get(`/doctor/${doctorId}/medicine`)
-      .then(res => {
-        setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
-      })
-      .catch(() => {
-        setMedicinesList([]);
-        setError("Failed to fetch medicines. Please try again.");
-      })
-      .finally(() => setLoading(false));
+    
+    try {
+      setLoading(true);
+      setError("");
+      const res = await axiosInstance.get(`/${doctorId}/medicine`);
+      setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
+    } catch (err) {
+      setMedicinesList([]);
+      setError("Failed to fetch medicines. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMedicines();
   }, [doctorId]);
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-    setErrors({ ...errors, [field]: "" });
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: "" });
+    }
   };
 
   const validateForm = () => {
-    let newErrors = {};
-    Object.keys(formData).forEach((key) => {
-      if (!formData[key].trim()) {
-        newErrors[key] = "This field is required.";
-      }
-    });
-    return newErrors;
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = "Medicine name is required";
+    }
+    if (!formData.composition.trim()) {
+      newErrors.composition = "Composition is required";
+    }
+    if (!formData.frequency.trim()) {
+      newErrors.frequency = "Frequency is required";
+    }
+    if (!formData.dosage.trim()) {
+      newErrors.dosage = "Dosage is required";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSaveMedicine = async () => {
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (!validateForm()) return;
 
     try {
       setLoading(true);
@@ -99,9 +113,9 @@ const Medicines = () => {
       }
 
       // Refresh the medicines list
-      const res = await axiosInstance.get(`/${doctorId}/medicine`);
-      setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
+      await fetchMedicines();
 
+      // Reset form
       setFormData({
         name: "",
         composition: "",
@@ -114,7 +128,6 @@ const Medicines = () => {
       setEditIndex(null);
       setIsModalOpen(false);
     } catch (err) {
-      console.error('Error saving medicine:', err);
       setError(err.response?.data?.error || 'Failed to save medicine');
     } finally {
       setLoading(false);
@@ -122,8 +135,17 @@ const Medicines = () => {
   };
 
   const handleEdit = (index) => {
-    setFormData(filteredMedicines[index]);
+    const medicine = filteredMedicines[index];
+    setFormData({
+      name: medicine.name || "",
+      composition: medicine.composition || "",
+      frequency: medicine.frequency || "",
+      dosage: medicine.dosage || "",
+      notes: medicine.notes || "",
+      createdBy: medicine.createdBy || "",
+    });
     setEditIndex(index);
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -135,70 +157,77 @@ const Medicines = () => {
       await axiosInstance.delete(`/${doctorId}/medicine/${medicineId}`);
       
       // Refresh the medicines list
-      const res = await axiosInstance.get(`/${doctorId}/medicine`);
-      setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
+      await fetchMedicines();
       
       setDeleteIndex(null);
       setIsDeleteModalOpen(false);
     } catch (err) {
-      console.error('Error deleting medicine:', err);
       setError(err.response?.data?.error || 'Failed to delete medicine');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredMedicines = medicinesList.filter((row) =>
-    row.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleCreateNew = () => {
+    setFormData({
+      name: "",
+      composition: "",
+      frequency: "",
+      dosage: "",
+      notes: "",
+      createdBy: "",
+    });
+    setEditIndex(null);
+    setErrors({});
+    setIsModalOpen(true);
+  };
+
+  const filteredMedicines = medicinesList.filter((medicine) =>
+    medicine.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    medicine.composition?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredMedicines.length / pageSize);
   const paginatedData = filteredMedicines.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  if (loading) return <Loading />;
-  if (error) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="bg-red-100 text-red-700 p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-      </div>
-    </div>
-  );
+  if (loading && medicinesList.length === 0) return <Loading />;
 
   return (
     <div className="flex h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-2 bg-white overflow-y-auto">
-          <div className="max-w-[90%] mx-auto py-8 space-y-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-3xl leading-10 font-semibold">Medicines</h2>
+        <main className="flex-1 p-6 bg-gray-50 overflow-y-auto">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Medicine Library</h1>
+                <p className="text-gray-600 mt-1">Manage your medicine database for quick prescription access</p>
+              </div>
               <Button
-                className="bg-[#7042D9] text-black font-semibold px-4 py-2 rounded-full hover:bg-[#e0dbf6]"
-                onClick={() => {
-                  setFormData({
-                    name: "",
-                    composition: "",
-                    frequency: "",
-                    dosage: "",
-                    notes: "",
-                    createdBy: "",
-                  });
-                  setEditIndex(null);
-                  setIsModalOpen(true);
-                }}
+                onClick={handleCreateNew}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
               >
-                + Add Medicine
+                <FiPlus size={20} />
+                Add Medicine
               </Button>
             </div>
 
-            <div className="relative w-full mb-4">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {/* Search Bar */}
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder=" Search Medicine"
-                className="w-full pl-10 pr-4 py-2 border rounded-xl bg-[#f1ecf9] text-[#000000] focus:outline-none text-sm"
+                placeholder="Search medicines by name or composition..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -207,17 +236,20 @@ const Medicines = () => {
               />
             </div>
 
-            <div className="overflow-x-auto  rounded-xl">
+            {/* Table */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
               <GenericTable
                 columns={columns}
-                data={paginatedData.map((med, index) => ({
-                  ...med,
+                data={paginatedData.map((medicine, index) => ({
+                  ...medicine,
                   actions: (
-                    <div className="flex space-x-2">
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => handleEdit((currentPage - 1) * pageSize + index)}
-                        className="text-blue-600 font-medium"
+                        onClick={() => handleEdit(index)}
+                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm font-medium"
+                        title="Edit Medicine"
                       >
+                        <FiEdit2 size={16} />
                         Edit
                       </button>
                       <button
@@ -225,8 +257,10 @@ const Medicines = () => {
                           setDeleteIndex((currentPage - 1) * pageSize + index);
                           setIsDeleteModalOpen(true);
                         }}
-                        className="text-red-500 font-medium"
+                        className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm font-medium"
+                        title="Delete Medicine"
                       >
+                        <FiTrash2 size={16} />
                         Delete
                       </button>
                     </div>
@@ -236,136 +270,207 @@ const Medicines = () => {
                   if (accessor === "actions") {
                     return row[accessor];
                   }
-                  return <span className="text-sm text-[#7c69a7]">{row[accessor]}</span>;
+                  if (accessor === "notes" && row[accessor] && row[accessor].length > 50) {
+                    return (
+                      <span className="text-sm text-gray-600" title={row[accessor]}>
+                        {row[accessor].substring(0, 50)}...
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="text-sm text-gray-900">
+                      {row[accessor] || "-"}
+                    </span>
+                  );
                 }}
               />
+              
+              {paginatedData.length === 0 && !loading && (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 mb-4">
+                    <FiSearch size={48} className="mx-auto" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No medicines found</h3>
+                  <p className="text-gray-600">
+                    {searchTerm ? "Try adjusting your search terms" : "Get started by adding your first medicine"}
+                  </p>
+                </div>
+              )}
             </div>
 
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(page) => setCurrentPage(page)}
-            />
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            )}
           </div>
         </main>
 
-       
-        
+        {/* Add/Edit Modal */}
         <Modal
-  isOpen={isModalOpen}
-  onClose={() => setIsModalOpen(false)}
-  title={editIndex !== null ? "Edit Medicine" : "Add Medicine"}
->
-  <div className="grid grid-cols-1 gap-4">
-    {["name", "composition", "frequency", "dosage", "notes", "createdBy"].map((field) => (
-      <div key={field}>
-        <input
-          placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-          value={formData[field]}
-          onChange={(e) => handleInputChange(field, e.target.value)}
-          className="border px-3 py-2 rounded w-full"
-        />
-        {errors[field] && (
-          <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
-        )}
-      </div>
-    ))}
-  </div>
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title={editIndex !== null ? "Edit Medicine" : "Add New Medicine"}
+          size="lg"
+        >
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Medicine Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Paracetamol 500mg"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    errors.name ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.name && (
+                  <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+                )}
+              </div>
 
-  <div className="flex justify-end gap-4 mt-6">
-    <button
-      onClick={() => setIsModalOpen(false)}
-      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-    >
-      Cancel
-    </button>
-    <button
-      onClick={handleSaveMedicine}
-      className="px-4 py-2 bg-[#5e3bea] text-white rounded-md"
-    >
-      Save
-    </button>
-  </div>
-</Modal>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Composition *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Paracetamol 500mg, Caffeine 65mg"
+                  value={formData.composition}
+                  onChange={(e) => handleInputChange("composition", e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    errors.composition ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.composition && (
+                  <p className="text-red-500 text-sm mt-1">{errors.composition}</p>
+                )}
+              </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Frequency *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Twice daily, SOS"
+                  value={formData.frequency}
+                  onChange={(e) => handleInputChange("frequency", e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    errors.frequency ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.frequency && (
+                  <p className="text-red-500 text-sm mt-1">{errors.frequency}</p>
+                )}
+              </div>
 
-        {/* Delete confirm modal */}
-        {isDeleteModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 relative">
-              <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
-              <p>Are you sure you want to delete this medicine?</p>
-              <div className="flex justify-end gap-4 mt-6">
-                <button
-                  onClick={() => setIsDeleteModalOpen(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteConfirm}
-                  className="px-4 py-2 bg-red-500 text-white rounded-md"
-                >
-                  Delete
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dosage *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., 1 tablet, 5ml"
+                  value={formData.dosage}
+                  onChange={(e) => handleInputChange("dosage", e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    errors.dosage ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.dosage && (
+                  <p className="text-red-500 text-sm mt-1">{errors.dosage}</p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  placeholder="Additional notes, side effects, contraindications..."
+                  value={formData.notes}
+                  onChange={(e) => handleInputChange("notes", e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Created By
+                </label>
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={formData.createdBy}
+                  onChange={(e) => handleInputChange("createdBy", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
               </div>
             </div>
+
+            <div className="flex justify-end gap-4 pt-4 border-t">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMedicine}
+                disabled={loading}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : (editIndex !== null ? 'Update' : 'Save')}
+              </button>
+            </div>
           </div>
-        )}
+        </Modal>
+
+        {/* Delete Confirmation Modal */}
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          title="Confirm Delete"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-600">
+              Are you sure you want to delete this medicine? This action cannot be undone.
+            </p>
+            {deleteIndex !== null && medicinesList[deleteIndex] && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="font-medium text-gray-900">{medicinesList[deleteIndex].name}</p>
+                <p className="text-sm text-gray-600">{medicinesList[deleteIndex].composition}</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-4 pt-4">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={loading}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50"
+              >
+                {loading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
 };
 
 export default Medicines;
-
-
-
- {/* {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-xl p-6 relative">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute top-4 right-4 text-xl text-gray-600 hover:text-black"
-              >
-                &times;
-              </button>
-              <h2 className="text-xl font-semibold mb-4">
-                {editIndex !== null ? "Edit Medicine" : "Add Medicine"}
-              </h2>
-
-              <div className="grid grid-cols-1 gap-4">
-                {["name", "composition", "frequency", "dosage", "notes", "createdBy"].map(
-                  (field) => (
-                    <div key={field}>
-                      <input
-                        placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-                        value={formData[field]}
-                        onChange={(e) => handleInputChange(field, e.target.value)}
-                        className="border px-3 py-2 rounded w-full"
-                      />
-                      {errors[field] && (
-                        <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div className="flex justify-end gap-4 mt-6">
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveMedicine}
-                  className="px-4 py-2 bg-[#5e3bea] text-white rounded-md"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        )}*/}

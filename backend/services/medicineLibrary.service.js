@@ -108,7 +108,8 @@ const deleteMedicine = async ( medicineId ) => {
     }
 
     return {
-      statusCode: 204,
+      statusCode: 200,
+      message: 'Medicine deleted successfully',
     };
   } catch (error) {
     return {

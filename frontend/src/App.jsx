@@ -49,33 +49,77 @@ function App() {
   const [doctorName, setDoctorName] = useState('');
   const [doctorId, setDoctorId] = useState(localStorage.getItem('doctorId'));
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if it's a user login or doctor login
-    const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
-    
-    if (isUserLogin) {
-      // Set user context for user login
-      const userData = {
-        id: localStorage.getItem('userId'),
-        name: localStorage.getItem('userName'),
-        role: localStorage.getItem('userRole'),
-        permissions: JSON.parse(localStorage.getItem('userPermissions') || '{}'),
-        doctorId: localStorage.getItem('doctorId'),
-        doctorName: localStorage.getItem('doctorName'),
-        clinicName: localStorage.getItem('clinicName')
-      };
-      setUser(userData);
-      setDoctorName(userData.doctorName);
-    } else if (doctorId) {
-      // Set doctor context for doctor login
-      axiosInstance.get(`/doctor/${doctorId}`)
-        .then(res => {
-          setDoctorName(res.data.doctor?.name || '');
-        })
-        .catch(() => setDoctorName(''));
-    }
+    const loadUserData = async () => {
+      setIsLoading(true);
+      
+      // Check if it's a user login or doctor login
+      const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+      
+      if (isUserLogin) {
+        // Set user context for user login
+        const userData = {
+          id: localStorage.getItem('userId'),
+          name: localStorage.getItem('userName'),
+          role: localStorage.getItem('userRole'),
+          permissions: JSON.parse(localStorage.getItem('userPermissions') || '{}'),
+          doctorId: localStorage.getItem('doctorId'),
+          doctorName: localStorage.getItem('doctorName'),
+          clinicName: localStorage.getItem('clinicName')
+        };
+        setUser(userData);
+        setDoctorName(userData.doctorName);
+      } else if (doctorId) {
+        // Set doctor context for doctor login
+        try {
+          const res = await axiosInstance.get(`/doctor/${doctorId}`);
+          const doctorName = res.data.doctor?.name || '';
+          setDoctorName(doctorName);
+          
+          // Update localStorage with the correct doctor name
+          if (doctorName) {
+            localStorage.setItem('doctorName', doctorName);
+          }
+        } catch (error) {
+          console.error('Error fetching doctor data:', error);
+          setDoctorName('');
+          // Clear invalid doctor data
+          localStorage.removeItem('doctorId');
+          localStorage.removeItem('doctorName');
+          localStorage.removeItem('jwt_token');
+        }
+      }
+      
+      setIsLoading(false);
+    };
+
+    loadUserData();
   }, [doctorId]);
+
+  // Listen for storage changes (when user logs in/out)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'doctorId') {
+        setDoctorId(e.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <DoctorIdContext.Provider value={doctorId}>
