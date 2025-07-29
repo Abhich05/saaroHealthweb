@@ -3,14 +3,27 @@ const Doctor = require('../models/doctor');
 
 const doctorMiddleware = async (req, res, next) => {
   try {
+    // Debug logging
+    console.log('=== DOCTOR MIDDLEWARE DEBUG ===');
+    console.log('Headers:', req.headers);
+    console.log('Cookies:', req.cookies);
+    console.log('URL:', req.originalUrl);
+    console.log('Method:', req.method);
+    
     // Try to get token from Authorization header or cookie
     let accessToken = null;
     if (req.headers.authorization) {
       accessToken = req.headers.authorization.replace('Bearer ', '');
+      console.log('Token from Authorization header:', accessToken ? 'Present' : 'Missing');
     } else if (req.cookies && req.cookies.jwt_token) {
       accessToken = req.cookies.jwt_token;
+      console.log('Token from cookie:', accessToken ? 'Present' : 'Missing');
+    } else {
+      console.log('No token found in headers or cookies');
     }
+    
     const { doctorId } = req.params;
+    console.log('Doctor ID from params:', doctorId);
 
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {

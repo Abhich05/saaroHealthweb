@@ -14,23 +14,34 @@ const axiosInstance = axios.create({
 // Add JWT to requests automatically
 axiosInstance.interceptors.request.use(
   (config) => {
+    // Debug logging
+    console.log('=== AXIOS INTERCEPTOR DEBUG ===');
+    console.log('Request URL:', config.url);
+    console.log('Request method:', config.method);
+    
     // Check if it's a user login or doctor login
     const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+    console.log('Is user login:', isUserLogin);
     
     if (isUserLogin) {
       // Use user JWT token
       const token = cookies.get('user_jwt_token');
+      console.log('User JWT token:', token ? 'Present' : 'Missing');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('Added user JWT to Authorization header');
       }
     } else {
       // Use doctor JWT token
       const token = cookies.get('jwt_token');
+      console.log('Doctor JWT token:', token ? 'Present' : 'Missing');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('Added doctor JWT to Authorization header');
       }
     }
     
+    console.log('Final headers:', config.headers);
     return config;
   },
   (error) => Promise.reject(error)

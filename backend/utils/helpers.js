@@ -30,9 +30,22 @@ const getAccessToken = (data) => {
 
 const verifyAccessToken = async (accessToken) => {
   try {
+    console.log('=== VERIFY ACCESS TOKEN DEBUG ===');
+    console.log('Token to verify:', accessToken ? 'Present' : 'Missing');
+    console.log('JWT_SECRET:', JWT_SECRET ? 'Present' : 'Missing');
+    
+    if (!accessToken) {
+      console.log('No access token provided');
+      return {
+        error: { name: 'JsonWebTokenError', message: 'jwt must be provided' }
+      };
+    }
+    
     const data = jwt.verify(accessToken, JWT_SECRET);
+    console.log('Token verified successfully');
     return data;
   } catch (error) {
+    console.log('Token verification failed:', error.message);
     return {
       error: error,
     };
