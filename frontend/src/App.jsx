@@ -14,6 +14,7 @@ import IPDRecords from "./pages/IpdRecords"
 import Settings from "./pages/Settings"
 import Templates from "./pages/Template"
 import DropDownConfiguration from "./pages/DropDownConfiguration"
+import Document from "./pages/Document"
 import Medicines from "./pages/Medicine"
 import PatientQueue from "./pages/PatientQueue" 
 import ConsultationForm from "./pages/Consult"
@@ -105,7 +106,7 @@ function App() {
             <Route path="/ipd" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="ipd"><IPDRecords /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="settings"><Settings /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/template-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Templates /></RoleProtectedRoute></ProtectedRoute>} />
-            <Route path="/dropdown-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><DropDownConfiguration /></RoleProtectedRoute></ProtectedRoute>} />
+            <Route path="/document-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Document /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/medicine-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Medicines /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/patient-queue" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="patientQueue"><PatientQueue /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path={`/:id/consult`} element={<ProtectedRoute><RoleProtectedRoute requiredPermission="createRx"><ConsultationForm /></RoleProtectedRoute></ProtectedRoute>} />

@@ -11,6 +11,7 @@ const prescriptionRoutes = require('./prescription.routes');
 const medicineLibraryRoutes = require('./medicineLibrary.routes');
 const templateLibraryRoutes = require('./templateLibrary.routes');
 const dropdownLibraryRoutes = require('./dropdownLibrary.routes');
+const documentRoutes = require('./document.routes');
 const doctorProfileRoutes = require('../routes/doctorProfile.routes');
 const patientAppointmentRoutes = require('../routes/patientAppointment.routes');
 const prescriptionSectionRoutes = require('../routes/prescriptionSection.routes');
@@ -92,6 +93,12 @@ router.use(
   '/:doctorId/dropdown',
   doctorMiddleware,
   dropdownLibraryRoutes,
+);
+
+router.use(
+  '/:doctorId/documents',
+  doctorMiddleware,
+  documentRoutes,
 );
 
 router.use(

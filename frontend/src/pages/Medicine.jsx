@@ -78,38 +78,47 @@ const Medicines = () => {
     return newErrors;
   };
 
-  const handleSaveMedicine = () => {
+  const handleSaveMedicine = async () => {
     const newErrors = validateForm();
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    const newMedicine = { ...formData };
+    try {
+      setLoading(true);
+      setError("");
 
-    if (editIndex !== null) {
-      const updatedList = [...medicinesList];
-      updatedList[editIndex] = newMedicine;
-      setMedicinesList(updatedList);
-    } else {
-      const newList = [newMedicine, ...medicinesList];
-      setMedicinesList(newList);
+      if (editIndex !== null) {
+        // Update existing medicine
+        const medicineId = medicinesList[editIndex]._id;
+        await axiosInstance.put(`/${doctorId}/medicine/${medicineId}`, formData);
+      } else {
+        // Create new medicine
+        await axiosInstance.post(`/${doctorId}/medicine`, formData);
+      }
 
-      const newTotalPages = Math.ceil(newList.filter((med) => med.name.toLowerCase().includes(searchTerm.toLowerCase())).length / pageSize);
-      setCurrentPage(newTotalPages);
+      // Refresh the medicines list
+      const res = await axiosInstance.get(`/${doctorId}/medicine`);
+      setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
+
+      setFormData({
+        name: "",
+        composition: "",
+        frequency: "",
+        dosage: "",
+        notes: "",
+        createdBy: "",
+      });
+      setErrors({});
+      setEditIndex(null);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Error saving medicine:', err);
+      setError(err.response?.data?.error || 'Failed to save medicine');
+    } finally {
+      setLoading(false);
     }
-
-    setFormData({
-      name: "",
-      composition: "",
-      frequency: "",
-      dosage: "",
-      notes: "",
-      createdBy: "",
-    });
-    setErrors({});
-    setEditIndex(null);
-    setIsModalOpen(false);
   };
 
   const handleEdit = (index) => {
@@ -118,12 +127,25 @@ const Medicines = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    const updatedList = [...medicinesList];
-    updatedList.splice(deleteIndex, 1);
-    setMedicinesList(updatedList);
-    setDeleteIndex(null);
-    setIsDeleteModalOpen(false);
+  const handleDeleteConfirm = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const medicineId = medicinesList[deleteIndex]._id;
+      await axiosInstance.delete(`/${doctorId}/medicine/${medicineId}`);
+      
+      // Refresh the medicines list
+      const res = await axiosInstance.get(`/${doctorId}/medicine`);
+      setMedicinesList(Array.isArray(res.data.medicines) ? res.data.medicines : []);
+      
+      setDeleteIndex(null);
+      setIsDeleteModalOpen(false);
+    } catch (err) {
+      console.error('Error deleting medicine:', err);
+      setError(err.response?.data?.error || 'Failed to delete medicine');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredMedicines = medicinesList.filter((row) =>

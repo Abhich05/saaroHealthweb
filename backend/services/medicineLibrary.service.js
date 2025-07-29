@@ -3,12 +3,16 @@ const MedicineLibrary = require('../models/medicineLibrary');
 const addMedicine = async ( doctorId, medicineDetails ) => {
   try {
     const {
-      medicineName,
+      name,
       composition,
+      frequency,
+      dosage,
+      notes,
+      createdBy,
     } = medicineDetails;
 
     if (
-      !medicineName
+      !name
       || !composition
     ) {
       return {
@@ -17,18 +21,14 @@ const addMedicine = async ( doctorId, medicineDetails ) => {
       };
     }
 
-    const medicine = await MedicineLibrary.findOne({ medicineName });
-    if (medicine) {
-      return {
-        statusCode: 409,
-        error: `${medicineName} Medicine already exist`,
-      };
-    }
-
     const newMedicine = new MedicineLibrary({
       doctorId,
-      medicineName,
+      name,
       composition,
+      frequency,
+      dosage,
+      notes,
+      createdBy,
     });
     await newMedicine.save();
 
@@ -51,6 +51,42 @@ const getAllMedicinesByDoctorId = async ( doctorId ) => {
     return {
       statusCode: 200,
       medicines,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error,
+    };
+  }
+}
+
+const updateMedicine = async (medicineId, medicineDetails) => {
+  try {
+    const { name, composition, frequency, dosage, notes, createdBy } = medicineDetails;
+
+    if (!name || !composition) {
+      return {
+        statusCode: 400,
+        error: 'Medicine name and composition both are required',
+      };
+    }
+
+    const medicine = await MedicineLibrary.findByIdAndUpdate(
+      medicineId,
+      { name, composition, frequency, dosage, notes, createdBy },
+      { new: true }
+    );
+
+    if (!medicine) {
+      return {
+        statusCode: 404,
+        error: 'Medicine not found',
+      };
+    }
+
+    return {
+      statusCode: 200,
+      medicine: medicine,
     };
   } catch (error) {
     return {
@@ -85,5 +121,6 @@ const deleteMedicine = async ( medicineId ) => {
 module.exports = {
   addMedicine,
   getAllMedicinesByDoctorId,
+  updateMedicine,
   deleteMedicine,
 };

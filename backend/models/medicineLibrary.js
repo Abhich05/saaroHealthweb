@@ -8,15 +8,30 @@ const medicineLibrarySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Doctor',
     },
-    medicineName: {
+    name: {
       index: true,
       required: true,
       type: String,
-      unique: true,
     },
     composition: {
       required: true,
       type: String,
+    },
+    frequency: {
+      type: String,
+      default: '',
+    },
+    dosage: {
+      type: String,
+      default: '',
+    },
+    notes: {
+      type: String,
+      default: '',
+    },
+    createdBy: {
+      type: String,
+      default: '',
     },
   },
   {

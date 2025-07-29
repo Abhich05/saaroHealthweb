@@ -41,6 +41,30 @@ const getAllMedicinesByDoctorId = async (req, res) => {
   }
 }
 
+const updateMedicine = async (req, res) => {
+  try {
+    const { medicineId } = req.params;
+    const medicineDetails = req.body;
+    
+    const medicine = await medicineService.updateMedicine(medicineId, medicineDetails);
+    if (medicine?.error) {
+      return res
+        .status(medicine.statusCode)
+        .send(medicine.error);
+    }
+
+    res
+      .status(medicine.statusCode)
+      .json({
+        medicine: medicine.medicine,
+      });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 const deleteMedicine = async (req, res) => {
   try {
     const { medicineId } = req.params;
@@ -66,5 +90,6 @@ const deleteMedicine = async (req, res) => {
 module.exports = {
   addMedicine,
   getAllMedicinesByDoctorId,
+  updateMedicine,
   deleteMedicine,
 };
