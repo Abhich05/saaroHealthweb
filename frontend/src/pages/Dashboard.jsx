@@ -13,7 +13,6 @@ import Pagination from "../components/ui/Pagination";
 
 import axiosInstance from '../api/axiosInstance';
 import { DoctorIdContext, DoctorNameContext } from '../App';
-import QuickTest from '../components/QuickTest';
 
 const columns = [
   { label: "Patient Name", accessor: "name" },
@@ -215,8 +214,6 @@ const Dashboard = () => {
           {/* AI Modal */}
           {showAiModal && <AiModal onClose={() => setShowAiModal(false)} />}
           
-          {/* Quick Test Component */}
-          <QuickTest />
         </main>
       </div>
     </div>
