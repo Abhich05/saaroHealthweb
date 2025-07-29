@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
     doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true },
     permissions: { type: Object, default: {} },
     avatar: { type: String, default: '' },
+    phone: { type: String, default: '' },
     mobile: { type: String, default: '' },
     experience: { type: Number, default: 0 },
     specialization: { type: String, default: '' },

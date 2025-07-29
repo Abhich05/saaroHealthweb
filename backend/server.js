@@ -28,6 +28,39 @@ const {
 const dbConnection = require('./config/db.js');
 dbConnection();
 
+// Fix database index issues
+const fixDatabaseIndexes = async () => {
+  try {
+    const mongoose = require('mongoose');
+    const db = mongoose.connection;
+    
+    // Wait for database connection
+    await new Promise((resolve) => {
+      if (db.readyState === 1) {
+        resolve();
+      } else {
+        db.once('open', resolve);
+      }
+    });
+    
+    // Drop the problematic phone index from users collection
+    try {
+      await db.collection('users').dropIndex('phone_1');
+      console.log('Successfully dropped phone_1 index from users collection');
+    } catch (indexError) {
+      if (indexError.code === 27) { // Index not found
+        console.log('phone_1 index not found, skipping...');
+      } else {
+        console.log('Error dropping phone_1 index:', indexError.message);
+      }
+    }
+  } catch (error) {
+    console.log('Error fixing database indexes:', error.message);
+  }
+};
+
+fixDatabaseIndexes();
+
 // Serve static files
 const publicPath = path.join(__dirname, 'public');
 app.use('/public', express.static(publicPath)); 

@@ -29,9 +29,11 @@ const getUsersByDoctor = async (req, res) => {
 const createUser = async (req, res) => {
   try {
     const { doctorId } = req.params;
-    const { name, email, password, role, permissions, avatar } = req.body;
+    const { name, email, password, role, permissions, avatar, phone } = req.body;
     
+    console.log('=== CREATE USER DEBUG ===');
     console.log('Creating user with:', { name, email, role, password: password ? '***' : 'undefined' });
+    console.log('Doctor ID from params:', doctorId);
     console.log('Request headers:', req.headers);
     console.log('Request cookies:', req.cookies);
     
@@ -64,13 +66,21 @@ const createUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log('Password hashed successfully for user:', name);
     
-    const user = new User({ name, email, password: hashedPassword, role, permissions, avatar, doctorId });
+    const user = new User({ name, email, password: hashedPassword, role, permissions, avatar, phone, doctorId });
     await user.save();
     
     console.log('User created successfully:', user._id);
     res.status(201).json({ user });
   } catch (error) {
     console.error('Error creating user:', error);
+    
+    // Handle duplicate key error for phone field
+    if (error.code === 11000 && error.message.includes('phone')) {
+      return res.status(400).json({ 
+        error: 'Database schema issue: Please contact administrator to fix phone field index' 
+      });
+    }
+    
     res.status(500).json({ error: error.message });
   }
 };
@@ -78,7 +88,7 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { name, email, password, role, permissions, avatar } = req.body;
+    const { name, email, password, role, permissions, avatar, phone } = req.body;
     
     console.log('updateUser called with:', { userId, name, email, role, permissions });
     
@@ -94,7 +104,7 @@ const updateUser = async (req, res) => {
       return res.status(401).json({ error: 'Access token required' });
     }
     
-    const update = { name, email, role, permissions, avatar };
+    const update = { name, email, role, permissions, avatar, phone };
     if (password) {
       update.password = await bcrypt.hash(password, 10);
     }

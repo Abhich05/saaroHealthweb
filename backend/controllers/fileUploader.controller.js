@@ -58,7 +58,7 @@ const uploadAvatar = async (req, res) => {
         return res.status(400).json({ message: 'No file uploaded.' });
       }
 
-      const avatarUrl = `${process.env.SERVER_URL || 'http://localhost:5000'}/public/avatars/${req.file.filename}`;
+      const avatarUrl = `${process.env.SERVER_URL || 'https://saarohealthweb-1.onrender.com'}/public/avatars/${req.file.filename}`;
       
       return res.status(200).json({
         message: 'Avatar uploaded successfully.',

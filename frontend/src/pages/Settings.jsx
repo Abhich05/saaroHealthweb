@@ -334,6 +334,9 @@ const Settings = () => {
                                                     src={avatarPreview} 
                                                     alt="Avatar Preview" 
                                                     className="w-20 h-20 rounded-full object-cover border-2 border-gray-300"
+                                                    onError={(e) => {
+                                                        e.target.src = "https://randomuser.me/api/portraits/lego/1.jpg";
+                                                    }}
                                                 />
                                             </div>
                                         )}

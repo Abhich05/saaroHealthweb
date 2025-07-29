@@ -13,6 +13,7 @@ import Loading from "../components/ui/Loading";
 const emptyUserTemplate = {
   name: "",
   email: "",
+  phone: "",
   role: "custom",
   permissions: {
     dashboard: "none",
@@ -99,16 +100,22 @@ const UserManagementPage = () => {
   };
 
   const handleAddNewUser = async () => {
+    console.log('=== ADD NEW USER FUNCTION CALLED ===');
+    console.log('Doctor ID:', doctorId);
+    console.log('Selected user data:', selectedUser);
+    
     // Reset errors
     setErrors({ name: false, email: false });
     
     // Validation
     if (!selectedUser.name.trim()) {
       setErrors(prev => ({ ...prev, name: true }));
+      console.log('Name validation failed');
       return;
     }
     if (!selectedUser.email.trim()) {
       setErrors(prev => ({ ...prev, email: true }));
+      console.log('Email validation failed');
       return;
     }
     
@@ -117,17 +124,23 @@ const UserManagementPage = () => {
       const userData = {
         name: selectedUser.name.trim(),
         email: selectedUser.email.trim(),
+        phone: selectedUser.phone.trim(),
         password: selectedUser.password || 'changeme123',
         role: selectedUser.role,
         permissions: selectedUser.permissions,
         avatar: selectedUser.avatar
       };
       
+      console.log('Sending user data:', userData);
+      console.log('Request URL:', `/${doctorId}/users`);
+      
       const res = await axiosInstance.post(`/${doctorId}/users`, userData);
       
       // Show credentials modal
       setNewUserCredentials({
+        name: userData.name,
         email: userData.email,
+        phone: userData.phone,
         password: userData.password
       });
       setShowCredentials(true);
@@ -159,6 +172,7 @@ const UserManagementPage = () => {
       const userData = {
         name: selectedUser.name.trim(),
         email: selectedUser.email.trim(),
+        phone: selectedUser.phone.trim(),
         role: selectedUser.role,
         permissions: selectedUser.permissions,
         avatar: selectedUser.avatar
@@ -239,6 +253,18 @@ const UserManagementPage = () => {
                       setErrors((prev) => ({ ...prev, email: false }));
                     }}
                     className={`border p-2 w-full rounded ${errors.email ? "border-red-500" : ""}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={selectedUser.phone}
+                    onChange={(e) => {
+                      setSelectedUser({ ...selectedUser, phone: e.target.value });
+                    }}
+                    className="border p-2 w-full rounded"
+                    placeholder="Enter phone number"
                   />
                 </div>
                 <div>
@@ -332,13 +358,17 @@ const UserManagementPage = () => {
                   >
                     <div className="flex items-center space-x-2">
                       <img
-                        src={user.avatar}
+                        src={user.avatar || "https://randomuser.me/api/portraits/lego/1.jpg"}
                         alt={user.name}
                         className="w-10 h-10 rounded-full object-cover"
+                        onError={(e) => {
+                          e.target.src = "https://randomuser.me/api/portraits/lego/1.jpg";
+                        }}
                       />
                       <div>
                         <p className="font-medium">{user.name}</p>
                         <p className="text-[14px] text-[#736e7D]">{user.email}</p>
+                        <p className="text-[14px] text-[#736e7D]">{user.phone || 'No phone'}</p>
                         <p className="text-[14px] text-[#736e7D] italic">{user.role}</p>
                       </div>
                     </div>
@@ -391,6 +421,10 @@ const UserManagementPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Email</label>
                     <p className="text-sm text-gray-900">{newUserCredentials.email}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
+                    <p className="text-sm text-gray-900">{newUserCredentials.phone || 'Not provided'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Password</label>
