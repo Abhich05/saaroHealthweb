@@ -16,6 +16,12 @@ const QuickTest = () => {
   const testUserRoute = async () => {
     try {
       const doctorId = localStorage.getItem('doctorId');
+      const isUserLogin = localStorage.getItem('isUserLogin');
+      const jwtToken = document.cookie.includes('jwt_token');
+      const userJwtToken = document.cookie.includes('user_jwt_token');
+      
+      setResult(`Debug: DoctorID=${doctorId}, IsUser=${isUserLogin}, JWT=${jwtToken}, UserJWT=${userJwtToken}`);
+      
       const response = await fetch(`https://saarohealthweb-1.onrender.com/api/${doctorId}/users`, {
         credentials: 'include'
       });
