@@ -123,7 +123,7 @@ const IPDRecords = () => {
     setCurrentPage(1);
   }, [searchTerm, records]);
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   if (error) return (
     <div className="flex h-screen items-center justify-center">
       <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -229,6 +229,8 @@ const IPDRecords = () => {
             <GenericTable
               columns={columns}
               data={records}
+              loading={loading}
+              loadingRows={8}
               renderCell={(row, accessor) => {
                 const content = (() => {
                   if (accessor === "status") {

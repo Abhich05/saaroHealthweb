@@ -187,7 +187,7 @@ const Templates = () => {
   const totalPages = Math.ceil(filteredTemplates.length / pageSize);
   const paginatedData = filteredTemplates.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   
   if (error) return (
     <div className="flex h-screen items-center justify-center">
@@ -269,6 +269,8 @@ const Templates = () => {
                     </div>
                   ),
                 }))}
+                loading={loading}
+                loadingRows={8}
                 renderCell={(row, accessor) => {
                   if (accessor === "actions") {
                     return row[accessor];

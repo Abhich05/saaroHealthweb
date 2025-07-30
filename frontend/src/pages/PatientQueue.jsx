@@ -99,7 +99,7 @@ const PatientQueue = () => {
         },
     ];
 
-    if (loading) return <Loading />;
+    // Remove full page loading
     if (error) return (
         <div className="flex h-screen items-center justify-center">
             <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -141,6 +141,8 @@ const PatientQueue = () => {
                                     <GenericTable
                                         columns={columns}
                                         data={currentData}
+                                        loading={loading}
+                                        loadingRows={8}
                                         renderCell={(row, accessor) => {
                                             if (accessor === "status") {
                                                 return <span className="bg-[green-100] px-2 py-1 rounded">{row[accessor]}</span>;

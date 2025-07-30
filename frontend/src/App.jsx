@@ -254,6 +254,7 @@ function App() {
             <Route path="/template-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Templates /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/document-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Document /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/medicine-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Medicines /></RoleProtectedRoute></ProtectedRoute>} />
+            <Route path="/dropdown-configuration" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><DropDownConfiguration /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/patient-queue" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="patientQueue"><PatientQueue /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path={`/:id/consult`} element={<ProtectedRoute><RoleProtectedRoute requiredPermission="createRx"><ConsultationForm /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/view-history/:uid" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="allPatients"><PatientHistoryPage /></RoleProtectedRoute></ProtectedRoute>} />

@@ -215,7 +215,7 @@ const UserManagementPage = () => {
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   if (error) return <div className="flex h-screen items-center justify-center text-red-600">{error}</div>;
 
   return (
@@ -348,7 +348,23 @@ const UserManagementPage = () => {
               />
 
               <div className="mt-3 flex-1 overflow-y-auto space-y-2">
-                {filteredUsers.map((user) => (
+                {loading ? (
+                  // Loading skeleton for users
+                  Array.from({ length: 8 }).map((_, index) => (
+                    <div key={index} className="p-2 rounded flex items-center justify-between animate-pulse">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-200 rounded w-24"></div>
+                          <div className="h-3 bg-gray-200 rounded w-32"></div>
+                          <div className="h-3 bg-gray-200 rounded w-20"></div>
+                        </div>
+                      </div>
+                      <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                    </div>
+                  ))
+                ) : (
+                  filteredUsers.map((user) => (
                   <div
                     key={user._id || user.id}
                     className={`p-2 rounded flex items-center justify-between cursor-pointer hover:bg-gray-100 ${
@@ -382,7 +398,8 @@ const UserManagementPage = () => {
                       <MdDelete size={16} />
                     </button>
                   </div>
-                ))}
+                ))
+                )}
               </div>
 
               <div className="absolute bottom-2 right-3 flex gap-2 mt-4">

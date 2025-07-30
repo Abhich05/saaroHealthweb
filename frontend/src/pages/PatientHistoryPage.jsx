@@ -30,7 +30,7 @@ const PatientHistoryPage = () => {
       .finally(() => setLoading(false));
   }, [uid, location.state]);
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   if (!patient) return <p>No patient data found.</p>;
 
   return (

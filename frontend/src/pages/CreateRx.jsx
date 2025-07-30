@@ -168,7 +168,7 @@ const CreateRx = () => {
       .finally(() => setLoading(false));
   };
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   if (error) return (
     <div className="flex h-screen items-center justify-center">
       <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -201,6 +201,8 @@ const CreateRx = () => {
             <GenericTable
               columns={columns}
               data={mappedData}
+              loading={loading}
+              loadingRows={8}
               renderCell={(row, accessor) => {
                 if (accessor === "category") {
                   const colorMap = {

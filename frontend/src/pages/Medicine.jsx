@@ -190,7 +190,7 @@ const Medicines = () => {
   const totalPages = Math.ceil(filteredMedicines.length / pageSize);
   const paginatedData = filteredMedicines.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  if (loading && medicinesList.length === 0) return <Loading />;
+  // Remove full page loading
 
   return (
     <div className="flex h-screen">
@@ -266,6 +266,8 @@ const Medicines = () => {
                     </div>
                   ),
                 }))}
+                loading={loading}
+                loadingRows={8}
                 renderCell={(row, accessor) => {
                   if (accessor === "actions") {
                     return row[accessor];

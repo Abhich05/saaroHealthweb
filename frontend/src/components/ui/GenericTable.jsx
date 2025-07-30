@@ -1,15 +1,24 @@
 // --- File: components/ui/GenericTable.jsx ---
 
+import { TableLoader } from './Loading';
+
 /**
  * Generic Table Component
  * Props:
  *  - columns: Array<{ label: string, accessor: string, className?: string }>
  *  - data: Array<object>
  *  - renderCell?: (row: object, accessor: string) => ReactNode
+ *  - loading?: boolean
+ *  - loadingRows?: number
  */
 
-const GenericTable = ({ columns = [], data = [], renderCell }) => {
+const GenericTable = ({ columns = [], data = [], renderCell, loading = false, loadingRows = 5 }) => {
   console.log(columns)
+  
+  if (loading) {
+    return <TableLoader rows={loadingRows} columns={columns.length} />;
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
       <table className="table-fixed min-w-full">

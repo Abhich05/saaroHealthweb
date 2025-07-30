@@ -1,6 +1,11 @@
 import React from "react";
+import { KPILoader } from './Loading';
 
-const KPISection = ({ kpis }) => {
+const KPISection = ({ kpis, loading = false, loadingCount = 3 }) => {
+  if (loading) {
+    return <KPILoader count={loadingCount} />;
+  }
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
       {kpis.map((kpi) => (

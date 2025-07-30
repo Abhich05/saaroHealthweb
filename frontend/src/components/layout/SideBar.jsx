@@ -15,7 +15,8 @@ const Sidebar = () => {
   const [isLibraryOpen, setIsLibraryOpen] = useState(() =>
     location.pathname.startsWith("/template-library") ||
     location.pathname.startsWith("/medicine-library") ||
-    location.pathname.startsWith("/document-library")
+    location.pathname.startsWith("/document-library") ||
+    location.pathname.startsWith("/dropdown-configuration")
   );
   const doctorName = useContext(DoctorNameContext);
   const user = useContext(UserContext);
@@ -159,6 +160,14 @@ const SidebarContent = ({ isLibraryOpen, setIsLibraryOpen, navLinks }) => {
                     }
                   >
                     Document
+                  </NavLink>
+                  <NavLink
+                    to="/dropdown-configuration"
+                    className={({ isActive }) =>
+                      `block px-3 py-1 rounded hover:bg-gray-100 ${isActive ? "font-semibold bg-[#e6ddfa] text-black" : ""}`
+                    }
+                  >
+                    Dropdown
                   </NavLink>
                 </div>
               )}

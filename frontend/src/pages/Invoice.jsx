@@ -253,7 +253,7 @@ const Invoice = () => {
     ];
   }, [invoicesData]);
 
-  if (loading) return <Loading />;
+  // Remove full page loading
   if (error) return (
     <div className="flex h-screen items-center justify-center">
       <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -286,12 +286,14 @@ const Invoice = () => {
 
             {/* KPIs Section - use shared KPISection for Dashboard style */}
             <div className="w-max-lg mx-auto mb-8">
-              <KPISection kpis={kpiData} />
+              <KPISection kpis={kpiData} loading={loading} loadingCount={4} />
             </div>
 
             <GenericTable
               columns={columns}
               data={invoicesData}
+              loading={loading}
+              loadingRows={8}
               renderCell={(row, accessor) => {
                 if (accessor === "status") {
                   return <span className="text-sm px-3 py-1">{row.status}</span>;

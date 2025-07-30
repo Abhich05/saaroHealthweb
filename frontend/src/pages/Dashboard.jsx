@@ -8,7 +8,6 @@ import Header from "../components/layout/Header";
 import AiModal from "../components/ui/AiModal";
 import { BsChatDots } from "react-icons/bs"; 
 import { RxCross2 } from "react-icons/rx";
-import Loading from "../components/ui/Loading";
 import Pagination from "../components/ui/Pagination";
 
 import axiosInstance from '../api/axiosInstance';
@@ -55,8 +54,13 @@ const Dashboard = () => {
   const [patientGrowthData, setPatientGrowthData] = useState([]);
   const [appointmentTypeData, setAppointmentTypeData] = useState([]);
   const [plannedSurgeries, setPlannedSurgeries] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Granular loading states
+  const [kpisLoading, setKpisLoading] = useState(true);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [surgeriesLoading, setSurgeriesLoading] = useState(true);
+  const [graphsLoading, setGraphsLoading] = useState(true);
 
   // Add pagination state and logic for Today's Appointments
   const [currentAppointmentsPage, setCurrentAppointmentsPage] = useState(1);
@@ -75,54 +79,91 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!doctorId) return;
-    setLoading(true);
     setError("");
-    Promise.all([
-      axiosInstance.get(`/${doctorId}/report/kpis/${doctorId}`),
-      axiosInstance.get(`/${doctorId}/report/patient/12months`),
-      axiosInstance.get(`/${doctorId}/report/appointment/types`),
-      axiosInstance.get(`/${doctorId}/report/today-appointments?page=${currentAppointmentsPage}&limit=${appointmentsRowsPerPage}`),
-      axiosInstance.get(`/${doctorId}/report/planned-surgeries?page=${currentSurgeriesPage}&limit=${surgeriesRowsPerPage}`)
-    ])
-      .then(([
-        kpisRes,
-        patientGrowthRes,
-        appointmentTypeRes,
-        appointmentsRes,
-        surgeriesRes
-      ]) => {
-        setKpis(Array.isArray(kpisRes.data.kpis) ? kpisRes.data.kpis : []);
+
+    // Load KPIs
+    const loadKPIs = async () => {
+      setKpisLoading(true);
+      try {
+        const res = await axiosInstance.get(`/${doctorId}/report/kpis/${doctorId}`);
+        const kpisData = Array.isArray(res.data.kpis) ? res.data.kpis : [];
+        setKpis(kpisData);
+      } catch (error) {
+        console.error('Error loading KPIs:', error);
+        setKpis([]);
+      } finally {
+        setKpisLoading(false);
+      }
+    };
+
+    // Load graphs data
+    const loadGraphsData = async () => {
+      setGraphsLoading(true);
+      try {
+        const [patientGrowthRes, appointmentTypeRes] = await Promise.all([
+          axiosInstance.get(`/${doctorId}/report/patient/12months`),
+          axiosInstance.get(`/${doctorId}/report/appointment/types`)
+        ]);
+        
         // Format patient growth for 12 months
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const arr = Array.isArray(patientGrowthRes.data.patients) ? patientGrowthRes.data.patients : [];
         const now = new Date();
         setPatientGrowthData(arr.map((v, i) => ({ month: months[(now.getMonth() - 11 + i + 12) % 12], growth: v })));
+        
         // Format appointment types
         const types = Array.isArray(appointmentTypeRes.data.types) ? appointmentTypeRes.data.types : [];
         setAppointmentTypeData(types);
-        // Today's Appointments (paginated)
-        const appointments = Array.isArray(appointmentsRes.data.appointments) ? appointmentsRes.data.appointments : [];
-        setAppointmentsPageRows(appointments.map(mapAppointmentToTableRow));
-        setAppointmentsTotalPages(Math.max(1, Math.ceil((appointmentsRes.data.pagination?.total || appointments.length) / appointmentsRowsPerPage)));
-        // Planned Surgeries (paginated)
-        const surgeries = Array.isArray(surgeriesRes.data.surgeries) ? surgeriesRes.data.surgeries : [];
-        setSurgeriesPageRows(surgeries.map(mapSurgeryToTableRow));
-        setSurgeriesTotalPages(Math.max(1, Math.ceil((surgeriesRes.data.pagination?.total || surgeries.length) / surgeriesRowsPerPage)));
-      })
-      .catch(() => {
-        setKpis([]);
+      } catch (error) {
+        console.error('Error loading graphs data:', error);
         setPatientGrowthData([]);
         setAppointmentTypeData([]);
+      } finally {
+        setGraphsLoading(false);
+      }
+    };
+
+    // Load appointments
+    const loadAppointments = async () => {
+      setAppointmentsLoading(true);
+      try {
+        const res = await axiosInstance.get(`/${doctorId}/report/today-appointments?page=${currentAppointmentsPage}&limit=${appointmentsRowsPerPage}`);
+        const appointments = Array.isArray(res.data.appointments) ? res.data.appointments : [];
+        setAppointmentsPageRows(appointments.map(mapAppointmentToTableRow));
+        setAppointmentsTotalPages(Math.max(1, Math.ceil((res.data.pagination?.total || appointments.length) / appointmentsRowsPerPage)));
+      } catch (error) {
+        console.error('Error loading appointments:', error);
         setAppointmentsPageRows([]);
         setAppointmentsTotalPages(1);
+      } finally {
+        setAppointmentsLoading(false);
+      }
+    };
+
+    // Load surgeries
+    const loadSurgeries = async () => {
+      setSurgeriesLoading(true);
+      try {
+        const res = await axiosInstance.get(`/${doctorId}/report/planned-surgeries?page=${currentSurgeriesPage}&limit=${surgeriesRowsPerPage}`);
+        const surgeries = Array.isArray(res.data.surgeries) ? res.data.surgeries : [];
+        setSurgeriesPageRows(surgeries.map(mapSurgeryToTableRow));
+        setSurgeriesTotalPages(Math.max(1, Math.ceil((res.data.pagination?.total || surgeries.length) / surgeriesRowsPerPage)));
+      } catch (error) {
+        console.error('Error loading surgeries:', error);
         setSurgeriesPageRows([]);
         setSurgeriesTotalPages(1);
-        setError("Failed to fetch dashboard data. Please try again.");
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setSurgeriesLoading(false);
+      }
+    };
+
+    // Load all data
+    loadKPIs();
+    loadGraphsData();
+    loadAppointments();
+    loadSurgeries();
   }, [doctorId, currentAppointmentsPage, currentSurgeriesPage]);
 
-  if (loading) return <Loading />;
   if (error) return (
     <div className="flex h-screen items-center justify-center">
       <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -150,12 +191,21 @@ const Dashboard = () => {
             </div>
 
             <div className="w-max-lg mx-auto mb-8">
-              <KPISection kpis={kpis.map(kpi => ({ ...kpi, ...kpiDefaults[kpi.label] }))} />
+              <KPISection 
+                kpis={kpis.map(kpi => ({ ...kpi, ...kpiDefaults[kpi.label] }))} 
+                loading={kpisLoading}
+                loadingCount={3}
+              />
             </div>
 
             <div>
               <h2 className="text-lg font-semibold mb-3">Today's Appointments</h2>
-              <GenericTable columns={columns} data={appointmentsPageRows} />
+              <GenericTable 
+                columns={columns} 
+                data={appointmentsPageRows} 
+                loading={appointmentsLoading}
+                loadingRows={5}
+              />
               <div className="flex justify-center mt-4">
                 <Pagination
                   currentPage={currentAppointmentsPage}
@@ -168,25 +218,22 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-4 border rounded-xl">
                 <h3 className="text-sm font-medium mb-3">Patient Growth</h3>
-                {patientGrowthData.length > 0 ? (
-                  <LineGraph data={patientGrowthData} />
-                ) : (
-                  <div className="text-center text-gray-400 py-8">No data available</div>
-                )}
+                <LineGraph data={patientGrowthData} loading={graphsLoading} />
               </div>
               <div className="p-4 border rounded-xl">
                 <h3 className="text-sm font-medium mb-3">Appointment Types</h3>
-                {appointmentTypeData.length > 0 ? (
-                  <BarGraph data={appointmentTypeData} />
-                ) : (
-                  <div className="text-center text-gray-400 py-8">No data available</div>
-                )}
+                <BarGraph data={appointmentTypeData} loading={graphsLoading} />
               </div>
             </div>
 
             <div>
               <h2 className="text-lg font-semibold mb-3">Planned Surgeries</h2>
-              <GenericTable columns={columns2} data={surgeriesPageRows} />
+              <GenericTable 
+                columns={columns2} 
+                data={surgeriesPageRows} 
+                loading={surgeriesLoading}
+                loadingRows={5}
+              />
               <div className="flex justify-center mt-4">
                 <Pagination
                   currentPage={currentSurgeriesPage}
