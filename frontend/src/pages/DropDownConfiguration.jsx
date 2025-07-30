@@ -4,8 +4,8 @@ import Header from "../components/layout/Header";
 import GenericTable from "../components/ui/GenericTable";
 import axiosInstance from '../api/axiosInstance';
 import Button from "../components/ui/Button";
-import Modal from '../components/ui/GenericModal'; // adjust the path as needed
-import Pagination from "../components/ui/Pagination"; // ✅ Import Pagination
+import Modal from '../components/ui/GenericModal'; 
+import Pagination from "../components/ui/Pagination"; 
 import Loading from "../components/ui/Loading";
 import { DoctorIdContext } from '../App';
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, createContext } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import CustomToastContainer from "./components/ui/ToastContainer";
 
 import ProtectedRoute from "./components/routes/ProtectedRoute"
 import RoleProtectedRoute from "./components/routes/RoleProtectedRoute"
@@ -14,6 +15,7 @@ import IPDRecords from "./pages/IpdRecords"
 import Settings from "./pages/Settings"
 import Templates from "./pages/Template"
 import DropDownConfiguration from "./pages/DropDownConfiguration"
+import Referrals from "./pages/Referrals"
 import Document from "./pages/Document"
 import Medicines from "./pages/Medicine"
 import PatientQueue from "./pages/PatientQueue" 
@@ -227,6 +229,7 @@ function App() {
     <DoctorIdContext.Provider value={doctorId}>
       <DoctorNameContext.Provider value={doctorName}>
         <UserContext.Provider value={user}>
+          <CustomToastContainer />
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -255,6 +258,7 @@ function App() {
             <Route path="/document-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Document /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/medicine-library" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Medicines /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/dropdown-configuration" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><DropDownConfiguration /></RoleProtectedRoute></ProtectedRoute>} />
+            <Route path="/referrals" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="library"><Referrals /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/patient-queue" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="patientQueue"><PatientQueue /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path={`/:id/consult`} element={<ProtectedRoute><RoleProtectedRoute requiredPermission="createRx"><ConsultationForm /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="/view-history/:uid" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="allPatients"><PatientHistoryPage /></RoleProtectedRoute></ProtectedRoute>} />

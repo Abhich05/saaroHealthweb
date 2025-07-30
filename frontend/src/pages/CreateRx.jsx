@@ -1,100 +1,157 @@
-import React, { useState, useEffect } from "react";
-import { FiSearch } from "react-icons/fi";
+import React, { useState, useEffect, useContext } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import GenericTable from "../components/ui/GenericTable";
-import Modal from '../components/ui/GenericModal';
-import SearchBar from "../components/ui/SearchBar"; // adjust path if needed
-
+import SearchBar from "../components/ui/SearchBar";
 import Button from "../components/ui/Button";
-import { useContext } from "react";
+import Modal from "../components/ui/GenericModal";
+import ModalToast from "../components/ui/ModalToast";
+import Pagination from "../components/ui/Pagination";
 import { DoctorIdContext } from "../App";
 import axiosInstance from "../api/axiosInstance";
-import { Link } from "react-router-dom";
-import Pagination from "../components/ui/Pagination"; // We'll define this below
-import Loading from "../components/ui/Loading";
-
-const columns = [
-  { label: "UID", accessor: "uid" },
-  { label: "Name", accessor: "name" },
-  { label: "Phone", accessor: "phone" },
-  { label: "Last Visit", accessor: "lastVisit" },
-  { label: "Category", accessor: "category" },
-  { label: "Action", accessor: "action" },
-];
 
 const generateUID = () => Math.floor(10000 + Math.random() * 90000).toString();
 
 const mapPatientToTableRow = (patient) => {
-  // If patient is nested under patientId (from .populate)
   const p = patient.patientId ? patient.patientId : patient;
-  console.log('Patient row:', p, 'Category:', p.category); // Debug log
   return {
     uid: (p.uid || (typeof p._id === 'string' ? p._id.slice(-5) : '')) + '',
     name: (p.fullName || p.name || '') + '',
     phone: (p.phoneNumber || p.phone || '') + '',
     lastVisit: (p.lastVisit || (p.updatedAt ? String(p.updatedAt).slice(0, 10) : '')) + '',
-    category: (p.category || 'Follow-up') + '',
-    action: 'Consult',
+    category: (p.category || 'New') + '',
+    action: 'View',
     _id: p._id && typeof p._id === 'string' ? p._id : '',
   };
 };
 
 const CreateRx = () => {
-  const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
   const doctorId = useContext(DoctorIdContext);
   const [rxData, setRxData] = useState([]);
   const [mappedData, setMappedData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [existingPatientModal, setExistingPatientModal] = useState(false);
+  const [existingPatient, setExistingPatient] = useState(null);
+  const [modalErrors, setModalErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalToast, setModalToast] = useState(null);
+
+  // Pagination
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0
+  });
+
+  // New patient form data
   const [newPatient, setNewPatient] = useState({
     name: "",
     phone: "",
-    lastVisit: "",
+    altPhone: "",
+    title: "",
+    fatherName: "",
+    dob: "",
+    age: "",
+    gender: "",
+    email: "",
+    address: "",
+    bloodGroup: "",
+    allergies: "",
     category: "Follow-up",
+    referredBy: ""
   });
-  const [errors, setErrors] = useState({});
-  const [pagination, setPagination] = useState({ page: 1, limit: 7, total: 0 });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-  }, [searchTerm]);
+  // Show modal toast function
+  const showModalToast = (message, type = 'error', duration = 4000) => {
+    setModalToast({ message, type, duration });
+  };
 
-  useEffect(() => {
+  // Fetch patients
+  const fetchPatients = async () => {
     if (!doctorId) return;
     setLoading(true);
     setError("");
-    axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`)
-      .then(res => {
-        const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
-        setRxData(patients);
-        setPagination(prev => ({
-          ...prev,
-          total: res.data.pagination?.totalPatients || patients.length
-        }));
-        setMappedData(patients.map(mapPatientToTableRow));
-      })
-      .catch(() => {
-        setRxData([]);
-        setMappedData([]);
-        setError("Failed to fetch patients. Please try again.");
-      })
-      .finally(() => setLoading(false));
+    try {
+      const res = await axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`);
+      const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
+      setRxData(patients);
+      setMappedData(patients.map(mapPatientToTableRow));
+      setPagination(prev => ({
+        ...prev,
+        total: res.data.pagination?.totalPatients || patients.length
+      }));
+    } catch (err) {
+      setRxData([]);
+      const errorMessage = "Failed to fetch patients. Please try again.";
+      setError(errorMessage);
+      if (isModalOpen) {
+        showModalToast(errorMessage, 'error', 4000);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
   }, [doctorId, pagination.page, pagination.limit, searchTerm]);
 
-  const handleRegisterPatient = () => setIsModalOpen(true);
+  const handleRegisterPatient = () => {
+    setModalErrors({});
+    setNewPatient({
+      name: "",
+      phone: "",
+      altPhone: "",
+      title: "",
+      fatherName: "",
+      dob: "",
+      age: "",
+      gender: "",
+      email: "",
+      address: "",
+      bloodGroup: "",
+      allergies: "",
+      category: "Follow-up",
+      referredBy: ""
+    });
+    setShowMoreOptions(false);
+    setIsModalOpen(true);
+  };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setShowMoreOptions(false);
-    setNewPatient({ name: "", phone: "", lastVisit: "", category: "Follow-up" });
-    setErrors({});
+    setModalErrors({});
+    setExistingPatientModal(false);
+    setExistingPatient(null);
+    setModalToast(null);
+  };
+
+  // Check if patient already exists
+  const checkExistingPatient = async (phone) => {
+    try {
+      const res = await axiosInstance.get(`/patient/check/${doctorId}?phone=${phone}`);
+      if (res.data.exists) {
+        setExistingPatient(res.data.patient);
+        setExistingPatientModal(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error checking existing patient:', err);
+      return false;
+    }
   };
 
   const validateForm = () => {
     const newErrors = {};
+    
+    // Basic Information Section
     if (!newPatient.name || newPatient.name.trim().length < 3) {
       newErrors.name = "Name must be at least 3 characters";
     }
@@ -104,28 +161,53 @@ const CreateRx = () => {
     if (!newPatient.gender || !['Male', 'Female', 'Other'].includes(newPatient.gender)) {
       newErrors.gender = "Gender is required";
     }
+    
+    // Contact Information Section
     if (newPatient.altPhone && !/^[0-9]{10}$/.test(newPatient.altPhone)) {
       newErrors.altPhone = "Alternate phone must be 10 digits";
     }
-    setErrors(newErrors);
+    if (newPatient.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatient.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+    
+    // Personal Information Section
+    if (newPatient.age && (isNaN(newPatient.age) || newPatient.age < 0 || newPatient.age > 150)) {
+      newErrors.age = "Please enter a valid age";
+    }
+    
+    setModalErrors(newErrors);
+    
+    // Show toast for validation errors
+    if (Object.keys(newErrors).length > 0) {
+      showModalToast('Please fill in all required fields correctly!', 'error', 4000);
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleAddPatient = () => {
-    console.log('handleAddPatient called');
+  const handleAddPatient = async () => {
     if (!validateForm()) {
-      console.log('Validation failed', errors);
       return;
     }
-    if (!doctorId) {
-      console.log('No doctorId');
-      return;
+
+    // Check for existing patient
+    const exists = await checkExistingPatient(newPatient.phone);
+    if (exists) {
+      return; // Modal will be shown by checkExistingPatient
     }
+
+    await submitPatient();
+  };
+
+  const submitPatient = async () => {
+    if (!doctorId) return;
+    
+    setIsSubmitting(true);
     const payload = {
       fullName: newPatient.name,
-      phoneNumber: String(newPatient.phone), // as string
+      phoneNumber: String(newPatient.phone),
       gender: newPatient.gender,
-      category: newPatient.category, // <-- Add this line
+      category: newPatient.category,
       ...(newPatient.altPhone && /^[0-9]{10}$/.test(newPatient.altPhone) ? { alternatePhoneNumber: String(newPatient.altPhone) } : {}),
       spouseName: newPatient.fatherName || undefined,
       dateOfBirth: newPatient.dob || undefined,
@@ -135,37 +217,31 @@ const CreateRx = () => {
       bloodGroup: newPatient.bloodGroup || undefined,
       allergies: newPatient.allergies || undefined,
       referredBy: newPatient.referredBy || undefined
-      // tags: undefined // Omit unless you want to send a string
     };
-    console.log('Register Patient Payload:', payload);
-    setLoading(true);
-    setError("");
-    axiosInstance.post(`/patient/${doctorId}`, payload)
-      .then((res) => {
-        console.log('POST response', res);
-        // Refresh Rx list
-        axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`)
-          .then(res => {
-            const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
-            setRxData(patients);
-            setPagination(prev => ({
-              ...prev,
-              total: res.data.pagination?.totalPatients || patients.length
-            }));
-            setMappedData(patients.map(mapPatientToTableRow));
-          })
-          .catch(() => {
-            setRxData([]);
-            setError("Failed to fetch patients after adding.");
-          });
-        handleCloseModal();
-      })
-      .catch(err => {
-        console.log('POST error', err);
-        setErrors({ api: err.response?.data?.error || 'Failed to add patient' });
-        setError(err.response?.data?.error || 'Failed to add patient');
-      })
-      .finally(() => setLoading(false));
+
+    try {
+      await axiosInstance.post(`/patient/${doctorId}`, payload);
+      handleCloseModal();
+      fetchPatients(); // Refresh the list
+      showModalToast('Patient registered successfully!', 'success', 3000);
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to add patient';
+      setModalErrors({ api: errorMessage });
+      showModalToast(errorMessage, 'error', 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddToExisting = async () => {
+    setExistingPatientModal(false);
+    await submitPatient();
+    showModalToast('Patient added to existing record successfully!', 'success', 3000);
+  };
+
+  const handleAddAsNew = () => {
+    setExistingPatientModal(false);
+    // Continue with current form data
   };
 
   // Remove full page loading
@@ -189,14 +265,16 @@ const CreateRx = () => {
           <div className="max-w-[90%] mx-auto py-8 space-y-6">
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl leading-10 font-semibold">Create Rx</h1>
-              <Button onClick={handleRegisterPatient}>Register Patient</Button>
+              <div className="flex gap-2">
+                <Button onClick={handleRegisterPatient}>Register Patient</Button>
+              </div>
             </div>
 
             <SearchBar
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        placeholder="Search by Name, UID, Phone"
-      />
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Search by Name, UID, Phone"
+            />
 
             <GenericTable
               columns={columns}
@@ -231,13 +309,11 @@ const CreateRx = () => {
                   ? "text-[#69598C] text-400"
                   : "";
 
-                // Fallback: always render as string
                 const value = row[accessor];
                 return <span className={`text-sm ${highlightColor}`}>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>;
               }}
             />
 
-            {/* Always render Pagination, even if only one page */}
             <div className="flex justify-center mt-4">
               <Pagination
                 currentPage={pagination.page}
@@ -248,355 +324,351 @@ const CreateRx = () => {
           </div>
         </main>
 
-        
-        {<Modal
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-            title="Add Patient"
+        {/* Add Patient Modal */}
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title="Add Patient"
+          size="xl"
+          className="mx-4"
         >
-          {/* move your entire patient form code inside here */}
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 overflow-y-auto">
-                    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-xl space-y-4 overflow-y-auto max-h-[90vh]">
-                      <h2 className="text-xl font-semibold mb-4">Add Patient</h2>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input value="+91" disabled className="w-full border rounded-md px-4 py-2 text-sm bg-gray-100" />
-                        <input
-                          type="text"
-                          placeholder="Primary Phone Number"
-                          value={newPatient.phone}
-                          onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm md:col-span-2"
-                        />
-                      </div>
-                      {errors.phone && <p className="text-red-500 text-xs">{errors.phone}</p>}
-
-                      <input
-                        type="text"
-                        placeholder="Alternate Phone Number (Optional)"
-                        value={newPatient.altPhone || ""}
-                        onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
-                        className="w-full border rounded-md px-4 py-2 text-sm"
-                      />
-                      {errors.altPhone && <p className="text-red-500 text-xs">{errors.altPhone}</p>}
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="relative">
-  <select
-    value={newPatient.title || ""}
-    onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
-    className="w-full border rounded-md px-4 py-2 text-sm appearance-none"
-  >
-    <option value="">Title</option>
-    <option>Mr</option>
-    <option>Ms</option>
-    <option>Mrs</option>
-    <option>Dr</option>
-  </select>
-  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-    ▼
-  </div>
-</div>
-
-                        <input
-                          type="text"
-                          placeholder="Full Name"
-                          value={newPatient.name}
-                          onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Father/Spouse Name"
-                          value={newPatient.fatherName || ""}
-                          onChange={(e) => setNewPatient({ ...newPatient, fatherName: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm"
-                        />
-                      </div>
-                      {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input
-                          type="date"
-                          value={newPatient.dob || ""}
-                          onChange={(e) => setNewPatient({ ...newPatient, dob: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Age"
-                          value={newPatient.age || ""}
-                          onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="relative">
-  <select
-    value={newPatient.gender || ""}
-    onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
-    className="w-full border rounded-md px-4 py-2 text-sm appearance-none"
-  >
-    <option value="">Gender</option>
-    <option>Male</option>
-    <option>Female</option>
-    <option>Other</option>
-  </select>
-  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-    ▼
-  </div>
-</div>
-
-                        <input
-                          type="email"
-                          placeholder="Email Address (Optional)"
-                          value={newPatient.email || ""}
-                          onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-                          className="w-full border rounded-md px-4 py-2 text-sm"
-                        />
-                      </div>
-
-                      <textarea
-                        placeholder="Address"
-                        value={newPatient.address || ""}
-                        onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
-                        className="w-full border rounded-md px-4 py-2 text-sm"
-                        rows={2}
-                      />
-
-                      <button
-                        className="px-4 py-1 border rounded-full text-sm font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200"
-                        onClick={() => setShowMoreOptions((prev) => !prev)}
-                      >
-                        {showMoreOptions ? "Hide Options" : "... More Options"}
-                      </button>
-
-                      {showMoreOptions && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <input
-                            type="text"
-                            placeholder="Blood Group"
-                            value={newPatient.bloodGroup || ""}
-                            onChange={(e) => setNewPatient({ ...newPatient, bloodGroup: e.target.value })}
-                            className="w-full border rounded-md px-4 py-2 text-sm"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Allergies (Optional)"
-                            value={newPatient.allergies || ""}
-                            onChange={(e) => setNewPatient({ ...newPatient, allergies: e.target.value })}
-                            className="w-full border rounded-md px-4 py-2 text-sm"
-                          />
-                          <div className="relative">
-  <select
-    value={newPatient.category}
-    onChange={(e) => setNewPatient({ ...newPatient, category: e.target.value })}
-    className="w-full border rounded-md px-4 py-2 text-sm appearance-none"
-  >
-    <option value="Follow-up">Follow-up</option>
-    <option value="Emergency">Emergency</option>
-    <option value="Chronic">Chronic</option>
-  </select>
-  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-    ▼
-  </div>
-</div>
-
-                          <input
-                            type="text"
-                            placeholder="Referred By"
-                            value={newPatient.referredBy || ""}
-                            onChange={(e) => setNewPatient({ ...newPatient, referredBy: e.target.value })}
-                            className="w-full border rounded-md px-4 py-2 text-sm"
-                          />
-                        </div>
-                      )}
-
-                      <div className="flex justify-end gap-4 mt-4">
-                        <button
-                          onClick={handleCloseModal}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleAddPatient}
-                          className="px-4 py-2 bg-[#5e3bea] text-white rounded-md"
-                        >
-                          Submit
-                        </button>
-                      </div>
-                    </div>
-          </div>
-        </Modal>}
-
-      </div>
-    </div>
-  );
-};
-
-export default CreateRx;
-
-
-
-
-{/*{isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-2xl space-y-4 overflow-y-auto max-h-[90vh]">
-              <h2 className="text-xl font-semibold mb-4">Add Patient</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input value="+91" disabled className="w-full border rounded-md px-4 py-2 text-sm bg-gray-100" />
-                <input
-                  type="text"
-                  placeholder="Primary Phone Number"
-                  value={newPatient.phone}
-                  onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm md:col-span-2"
-                />
-              </div>
-              {errors.phone && <p className="text-red-500 text-xs">{errors.phone}</p>}
-
-              <input
-                type="text"
-                placeholder="Alternate Phone Number (Optional)"
-                value={newPatient.altPhone || ""}
-                onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
-                className="w-full border rounded-md px-4 py-2 text-sm"
+          <div className="relative space-y-6 max-h-[85vh] overflow-y-auto px-2">
+            {/* Modal Toast */}
+            {modalToast && (
+              <ModalToast
+                message={modalToast.message}
+                type={modalToast.type}
+                duration={modalToast.duration}
+                onClose={() => setModalToast(null)}
               />
-              {errors.altPhone && <p className="text-red-500 text-xs">{errors.altPhone}</p>}
-
+            )}
+            {/* Contact Information Section */}
+            <div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <select
-                  value={newPatient.title || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                >
-                  <option value="">Title</option>
-                  <option>Mr</option>
-                  <option>Ms</option>
-                  <option>Mrs</option>
-                  <option>Dr</option>
-                </select>
+                <input value="+91" disabled className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm bg-gray-100" />
+                <div className="relative md:col-span-2">
+                  <input
+                    type="text"
+                    placeholder=" "
+                    value={newPatient.phone}
+                    onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                    className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.phone ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Primary Phone Number *
+                  </label>
+                </div>
+              </div>
+              <div className="relative mt-4">
                 <input
                   type="text"
-                  placeholder="Full Name"
-                  value={newPatient.name}
-                  onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
+                  placeholder=" "
+                  value={newPatient.altPhone || ""}
+                  onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
                 />
-                <input
-                  type="text"
-                  placeholder="Father/Spouse Name"
-                  value={newPatient.fatherName || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, fatherName: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                />
+                <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                  Alternate Phone Number (Optional)
+                </label>
               </div>
-              {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
+            </div>
 
+            {/* Basic Information Section */}
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="relative">
+                  <select
+                    value={newPatient.title || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                  >
+                    <option value="">Title</option>
+                    <option>Mr</option>
+                    <option>Ms</option>
+                    <option>Mrs</option>
+                    <option>Dr</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    ▼
+                  </div>
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
+                    Title
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder=" "
+                    value={newPatient.name}
+                    onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                    className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.name ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Full Name *
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder=" "
+                    value={newPatient.fatherName || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, fatherName: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Father/Spouse Name
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Personal Information Section */}
+            <div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="date"
-                  value={newPatient.dob || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, dob: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  placeholder="Age"
-                  value={newPatient.age || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={newPatient.dob || ""}
+                    onChange={(e) => {
+                      const dob = e.target.value;
+                      let age = "";
+                      if (dob) {
+                        const today = new Date();
+                        const birthDate = new Date(dob);
+                        age = today.getFullYear() - birthDate.getFullYear();
+                        const monthDiff = today.getMonth() - birthDate.getMonth();
+                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                          age--;
+                        }
+                      }
+                      setNewPatient({ ...newPatient, dob, age: age.toString() });
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Date of Birth *
+                  </label>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    placeholder=" "
+                    value={newPatient.age || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                    readOnly
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Age
+                  </label>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <select
-                  value={newPatient.gender || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                >
-                  <option value="">Gender</option>
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
-                </select>
-                <input
-                  type="email"
-                  placeholder="Email Address (Optional)"
-                  value={newPatient.email || ""}
-                  onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-                  className="w-full border rounded-md px-4 py-2 text-sm"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="relative">
+                  <select
+                    value={newPatient.gender || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
+                    className={`w-full border rounded-md px-4 py-3 text-sm appearance-none peer ${modalErrors.gender ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  >
+                    <option value="">Gender</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                    <option>Other</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    ▼
+                  </div>
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
+                    Gender *
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="email"
+                    placeholder=" "
+                    value={newPatient.email || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Email Address (Optional)
+                  </label>
+                </div>
               </div>
 
-              <textarea
-                placeholder="Address"
-                value={newPatient.address || ""}
-                onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
-                className="w-full border rounded-md px-4 py-2 text-sm"
-                rows={2}
-              />
+              <div className="relative mt-4">
+                <textarea
+                  placeholder=" "
+                  value={newPatient.address || ""}
+                  onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                  rows={2}
+                />
+                <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                  Address
+                </label>
+              </div>
+            </div>
 
+
+            {/* Additional Options */}
+            <div>
               <button
-                className="px-4 py-1 border rounded-full text-sm font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200"
+                className="px-4 py-1 border rounded-full text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200"
                 onClick={() => setShowMoreOptions((prev) => !prev)}
               >
                 {showMoreOptions ? "Hide Options" : "... More Options"}
               </button>
 
               {showMoreOptions && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    placeholder="Blood Group"
-                    value={newPatient.bloodGroup || ""}
-                    onChange={(e) => setNewPatient({ ...newPatient, bloodGroup: e.target.value })}
-                    className="w-full border rounded-md px-4 py-2 text-sm"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Allergies (Optional)"
-                    value={newPatient.allergies || ""}
-                    onChange={(e) => setNewPatient({ ...newPatient, allergies: e.target.value })}
-                    className="w-full border rounded-md px-4 py-2 text-sm"
-                  />
-                  <select
-                    value={newPatient.category}
-                    onChange={(e) => setNewPatient({ ...newPatient, category: e.target.value })}
-                    className="w-full border rounded-md px-4 py-2 text-sm"
-                  >
-                    <option value="Follow-up">Follow-up</option>
-                    <option value="Emergency">Emergency</option>
-                    <option value="Chronic">Chronic</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Referred By"
-                    value={newPatient.referredBy || ""}
-                    onChange={(e) => setNewPatient({ ...newPatient, referredBy: e.target.value })}
-                    className="w-full border rounded-md px-4 py-2 text-sm"
-                  />
+                <div className="mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder=" "
+                        value={newPatient.bloodGroup || ""}
+                        onChange={(e) => setNewPatient({ ...newPatient, bloodGroup: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                      />
+                      <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                        Blood Group
+                      </label>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder=" "
+                        value={newPatient.allergies || ""}
+                        onChange={(e) => setNewPatient({ ...newPatient, allergies: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                      />
+                      <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                        Allergies (Optional)
+                      </label>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        value={newPatient.category}
+                        onChange={(e) => setNewPatient({ ...newPatient, category: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                      >
+                        <option value="Follow-up">Follow-up</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Chronic">Chronic</option>
+                      </select>
+                      <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        ▼
+                      </div>
+                      <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
+                        Category
+                      </label>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder=" "
+                        value={newPatient.referredBy || ""}
+                        onChange={(e) => setNewPatient({ ...newPatient, referredBy: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                      />
+                      <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                        Referred By
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
+            </div>
 
-              <div className="flex justify-end gap-4 mt-4">
-                <button
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddPatient}
-                  className="px-4 py-2 bg-[#5e3bea] text-white rounded-md"
-                >
-                  Submit
-                </button>
-              </div>
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-4 pt-4">
+              <button
+                onClick={handleCloseModal}
+                className="px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddPatient}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Adding..." : "Submit"}
+              </button>
             </div>
           </div>
-        )}*/}
+        </Modal>
+
+        {/* Existing Patient Modal */}
+        <Modal
+          isOpen={existingPatientModal}
+          onClose={() => setExistingPatientModal(false)}
+          title="Patient Already Exists"
+          size="lg"
+          className="mx-4"
+        >
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
+              <p className="font-semibold">Patient with this phone number already exists:</p>
+              <p className="mt-2">
+                <strong>Name:</strong> {existingPatient?.fullName || existingPatient?.name}<br />
+                <strong>Phone:</strong> {existingPatient?.phoneNumber || existingPatient?.phone}<br />
+                <strong>UID:</strong> {existingPatient?.uid}
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-gray-700">What would you like to do?</p>
+              
+              <button
+                onClick={handleAddToExisting}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                disabled={isSubmitting}
+              >
+                Add to Existing Patient
+              </button>
+              
+              <button
+                onClick={handleAddAsNew}
+                className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition"
+                disabled={isSubmitting}
+              >
+                Register as New Patient
+              </button>
+              
+              <button
+                onClick={() => setExistingPatientModal(false)}
+                className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    </div>
+  );
+};
+
+const columns = [
+  { label: "UID", accessor: "uid" },
+  { label: "Name", accessor: "name" },
+  { label: "Phone", accessor: "phone" },
+  { label: "Last Visit", accessor: "lastVisit" },
+  { label: "Category", accessor: "category" },
+  { label: "Action", accessor: "action" },
+];
+
+export default CreateRx;

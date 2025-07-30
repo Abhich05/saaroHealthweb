@@ -16,7 +16,8 @@ const Sidebar = () => {
     location.pathname.startsWith("/template-library") ||
     location.pathname.startsWith("/medicine-library") ||
     location.pathname.startsWith("/document-library") ||
-    location.pathname.startsWith("/dropdown-configuration")
+    location.pathname.startsWith("/dropdown-configuration") ||
+    location.pathname.startsWith("/referrals")
   );
   const doctorName = useContext(DoctorNameContext);
   const user = useContext(UserContext);
@@ -168,6 +169,14 @@ const SidebarContent = ({ isLibraryOpen, setIsLibraryOpen, navLinks }) => {
                     }
                   >
                     Dropdown
+                  </NavLink>
+                  <NavLink
+                    to="/referrals"
+                    className={({ isActive }) =>
+                      `block px-3 py-1 rounded hover:bg-gray-100 ${isActive ? "font-semibold bg-[#e6ddfa] text-black" : ""}`
+                    }
+                  >
+                    Referrals
                   </NavLink>
                 </div>
               )}
