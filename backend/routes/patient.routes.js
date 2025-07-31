@@ -23,6 +23,11 @@ patient.get(
 );
 
 patient.get(
+  '/check/:doctorId',
+  patientController.checkPatient,
+);
+
+patient.get(
   '/:patientId',
   patientController.getPatientById,
 );

@@ -225,9 +225,16 @@ const CreateRx = () => {
       fetchPatients(); // Refresh the list
       showModalToast('Patient registered successfully!', 'success', 3000);
     } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Failed to add patient';
-      setModalErrors({ api: errorMessage });
-      showModalToast(errorMessage, 'error', 4000);
+      // Handle 409 Conflict - Patient already exists
+      if (err.response?.status === 409) {
+        const errorMessage = err.response?.data?.error || 'Patient already exists';
+        showModalToast(errorMessage, 'error', 4000);
+        // Don't close modal, let user see the error
+      } else {
+        const errorMessage = err.response?.data?.error || 'Failed to add patient';
+        setModalErrors({ api: errorMessage });
+        showModalToast(errorMessage, 'error', 4000);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -235,13 +242,47 @@ const CreateRx = () => {
 
   const handleAddToExisting = async () => {
     setExistingPatientModal(false);
-    await submitPatient();
-    showModalToast('Patient added to existing record successfully!', 'success', 3000);
+    setIsSubmitting(true);
+    
+    try {
+      // Update the existing patient with new information
+      const updatePayload = {
+        ...(newPatient.name && { fullName: newPatient.name }),
+        ...(newPatient.gender && { gender: newPatient.gender }),
+        ...(newPatient.category && { category: newPatient.category }),
+        ...(newPatient.altPhone && /^[0-9]{10}$/.test(newPatient.altPhone) ? { alternatePhoneNumber: String(newPatient.altPhone) } : {}),
+        ...(newPatient.fatherName && { spouseName: newPatient.fatherName }),
+        ...(newPatient.dob && { dateOfBirth: newPatient.dob }),
+        ...(newPatient.age && { age: Number(newPatient.age) }),
+        ...(newPatient.email && { email: newPatient.email }),
+        ...(newPatient.address && { address: newPatient.address }),
+        ...(newPatient.bloodGroup && { bloodGroup: newPatient.bloodGroup }),
+        ...(newPatient.allergies && { allergies: newPatient.allergies }),
+        ...(newPatient.referredBy && { referredBy: newPatient.referredBy })
+      };
+
+      // Only update if there are fields to update
+      if (Object.keys(updatePayload).length > 0) {
+        await axiosInstance.put(`/patient/${existingPatient._id}`, updatePayload);
+      }
+      
+      handleCloseModal();
+      fetchPatients(); // Refresh the list
+      showModalToast('Patient information updated successfully!', 'success', 3000);
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to update patient';
+      showModalToast(errorMessage, 'error', 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddAsNew = () => {
     setExistingPatientModal(false);
-    // Continue with current form data
+    // Clear the phone number to avoid the same check again
+    setNewPatient(prev => ({ ...prev, phone: "" }));
+    // Open the main register patient modal
+    setIsModalOpen(true);
   };
 
   // Remove full page loading

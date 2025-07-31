@@ -1,5 +1,30 @@
 const patientService = require('../services/patient.service');
 
+const checkPatient = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const { phone } = req.query;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const result = await patientService.checkPatient(phone, doctorId);
+    
+    if (result?.error) {
+      return res.status(result.statusCode).send(result.error);
+    }
+
+    res.status(result.statusCode).json({
+      exists: result.exists,
+      patient: result.patient
+    });
+  } catch (error) {
+    console.error('Check Patient Error:', error);
+    res.status(500).send(`Error: ${error}`);
+  }
+};
+
 const registerPatient = async (req, res) => {
   try {
     console.log('registerPatient req.body:', req.body); // Debug log
@@ -172,6 +197,7 @@ const getPatientByUid = async (req, res) => {
 };
 
 module.exports = {
+  checkPatient,
   registerPatient,
   generateOTP,
   validateOTP,

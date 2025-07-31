@@ -5,6 +5,38 @@ const { validatePatient } = require('../validations/patient.validation');
 const { sendTemplateMessage } = require('../utils/whatsapp');
 const Prescription = require('../models/prescription');
 
+const checkPatient = async (phoneNumber, doctorId) => {
+  try {
+    // Find patient by phone number
+    const patient = await Patient.findOne({ phoneNumber });
+    
+    if (!patient) {
+      return {
+        statusCode: 200,
+        exists: false,
+        patient: null
+      };
+    }
+
+    // Check if this patient is already associated with this doctor
+    const doctorPatient = await DoctorPatient.findOne({ 
+      patientId: patient._id, 
+      doctorId 
+    });
+
+    return {
+      statusCode: 200,
+      exists: true,
+      patient: patient
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error.message
+    };
+  }
+};
+
 const registerPatient = async ( patientData, doctorId ) => {
   try {
     const {
@@ -32,27 +64,35 @@ const registerPatient = async ( patientData, doctorId ) => {
       };
     }
 
-    // const patient = await Patient.findOne({ phoneNumber });
-    // if (patient) {
-    //   const doctorPatient = await DoctorPatient.findOne({ patientId: patient._id, doctorId });
+    // Check if patient already exists with this phone number
+    const existingPatient = await Patient.findOne({ phoneNumber });
+    if (existingPatient) {
+      // Check if this patient is already associated with this doctor
+      const doctorPatient = await DoctorPatient.findOne({ 
+        patientId: existingPatient._id, 
+        doctorId 
+      });
 
-    //   if (!doctorPatient) {
-    //     const doctorPatient = new DoctorPatient({
-    //       doctorId,
-    //       patientId: patient._id,
-    //     });
-    //     await doctorPatient.save();
-    //     return {
-    //       statusCode: 201,
-    //       patient: patient,
-    //     };
-    //   }
+      if (doctorPatient) {
+        return {
+          statusCode: 409,
+          error: `Patient with phone number ${phoneNumber} already exists for this doctor`,
+        };
+      }
 
-    //   return {
-    //     statusCode: 409,
-    //     error: `Patient with ${phoneNumber} already exist`,
-    //   };
-    // }
+      // If patient exists but not associated with this doctor, create the association
+      const newDoctorPatient = new DoctorPatient({
+        doctorId,
+        patientId: existingPatient._id,
+        lastUpdated: new Date(),
+      });
+      await newDoctorPatient.save();
+      
+      return {
+        statusCode: 201,
+        patient: existingPatient,
+      };
+    }
 
     const uid = await generatePatientUid();
     const newPatient = new Patient({
