@@ -40,6 +40,7 @@ const checkPatient = async (phoneNumber, doctorId) => {
 const registerPatient = async ( patientData, doctorId ) => {
   try {
     const {
+      title,
       fullName,
       phoneNumber,
       spouseName,
@@ -97,6 +98,7 @@ const registerPatient = async ( patientData, doctorId ) => {
     const uid = await generatePatientUid();
     const newPatient = new Patient({
       uid,
+      title,
       fullName,
       phoneNumber,
       spouseName,

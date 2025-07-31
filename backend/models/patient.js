@@ -8,6 +8,10 @@ const patientSchema = new mongoose.Schema(
       type: String,
       unique: true,
     },
+    title: {
+      type: String,
+      required: true,
+    },
     fullName: {
       required: true,
       type: String,
@@ -28,6 +32,7 @@ const patientSchema = new mongoose.Schema(
     },
     dateOfBirth: {
       type: Date,
+      required: true,
     },
     age: {
       type: Number,

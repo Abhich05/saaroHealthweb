@@ -152,6 +152,9 @@ const CreateRx = () => {
     const newErrors = {};
     
     // Basic Information Section
+    if (!newPatient.title || newPatient.title.trim() === '') {
+      newErrors.title = "Title is required";
+    }
     if (!newPatient.name || newPatient.name.trim().length < 3) {
       newErrors.name = "Name must be at least 3 characters";
     }
@@ -162,17 +165,20 @@ const CreateRx = () => {
       newErrors.gender = "Gender is required";
     }
     
+    // Personal Information Section
+    if (!newPatient.dob || newPatient.dob.trim() === '') {
+      newErrors.dob = "Date of Birth is required";
+    }
+    if (newPatient.age && (isNaN(newPatient.age) || newPatient.age < 0 || newPatient.age > 150)) {
+      newErrors.age = "Please enter a valid age";
+    }
+    
     // Contact Information Section
     if (newPatient.altPhone && !/^[0-9]{10}$/.test(newPatient.altPhone)) {
       newErrors.altPhone = "Alternate phone must be 10 digits";
     }
     if (newPatient.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatient.email)) {
       newErrors.email = "Please enter a valid email address";
-    }
-    
-    // Personal Information Section
-    if (newPatient.age && (isNaN(newPatient.age) || newPatient.age < 0 || newPatient.age > 150)) {
-      newErrors.age = "Please enter a valid age";
     }
     
     setModalErrors(newErrors);
@@ -204,13 +210,14 @@ const CreateRx = () => {
     
     setIsSubmitting(true);
     const payload = {
+      title: newPatient.title,
       fullName: newPatient.name,
       phoneNumber: String(newPatient.phone),
       gender: newPatient.gender,
       category: newPatient.category,
       ...(newPatient.altPhone && /^[0-9]{10}$/.test(newPatient.altPhone) ? { alternatePhoneNumber: String(newPatient.altPhone) } : {}),
       spouseName: newPatient.fatherName || undefined,
-      dateOfBirth: newPatient.dob || undefined,
+      dateOfBirth: newPatient.dob,
       age: newPatient.age ? Number(newPatient.age) : undefined,
       email: newPatient.email || undefined,
       address: newPatient.address || undefined,
@@ -247,6 +254,7 @@ const CreateRx = () => {
     try {
       // Update the existing patient with new information
       const updatePayload = {
+        ...(newPatient.title && { title: newPatient.title }),
         ...(newPatient.name && { fullName: newPatient.name }),
         ...(newPatient.gender && { gender: newPatient.gender }),
         ...(newPatient.category && { category: newPatient.category }),
@@ -417,25 +425,25 @@ const CreateRx = () => {
             {/* Basic Information Section */}
             <div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
-                  <select
-                    value={newPatient.title || ""}
-                    onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
-                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
-                  >
-                    <option value="">Title</option>
-                    <option>Mr</option>
-                    <option>Ms</option>
-                    <option>Mrs</option>
-                    <option>Dr</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                    ▼
-                  </div>
-                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
-                    Title
-                  </label>
-                </div>
+                                 <div className="relative">
+                   <select
+                     value={newPatient.title || ""}
+                     onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
+                     className={`w-full border rounded-md px-4 py-3 text-sm appearance-none peer ${modalErrors.title ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                   >
+                     <option value="">Title</option>
+                     <option>Mr</option>
+                     <option>Ms</option>
+                     <option>Mrs</option>
+                     <option>Dr</option>
+                   </select>
+                   <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                     ▼
+                   </div>
+                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
+                     Title *
+                   </label>
+                 </div>
 
                 <div className="relative">
                   <input
@@ -468,31 +476,31 @@ const CreateRx = () => {
             {/* Personal Information Section */}
             <div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={newPatient.dob || ""}
-                    onChange={(e) => {
-                      const dob = e.target.value;
-                      let age = "";
-                      if (dob) {
-                        const today = new Date();
-                        const birthDate = new Date(dob);
-                        age = today.getFullYear() - birthDate.getFullYear();
-                        const monthDiff = today.getMonth() - birthDate.getMonth();
-                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                          age--;
-                        }
-                      }
-                      setNewPatient({ ...newPatient, dob, age: age.toString() });
-                    }}
-                    className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
-                    max={new Date().toISOString().split('T')[0]}
-                  />
-                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
-                    Date of Birth *
-                  </label>
-                </div>
+                                 <div className="relative">
+                   <input
+                     type="date"
+                     value={newPatient.dob || ""}
+                     onChange={(e) => {
+                       const dob = e.target.value;
+                       let age = "";
+                       if (dob) {
+                         const today = new Date();
+                         const birthDate = new Date(dob);
+                         age = today.getFullYear() - birthDate.getFullYear();
+                         const monthDiff = today.getMonth() - birthDate.getMonth();
+                         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                           age--;
+                         }
+                       }
+                       setNewPatient({ ...newPatient, dob, age: age.toString() });
+                     }}
+                     className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.dob ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                     max={new Date().toISOString().split('T')[0]}
+                   />
+                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                     Date of Birth *
+                   </label>
+                 </div>
                 <div className="relative">
                   <input
                     type="number"
