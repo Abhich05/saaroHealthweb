@@ -3,12 +3,15 @@ import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import KPISection from "../components/ui/KpiSection";
 import GenericTable from "../components/ui/GenericTable";
-import Modal from '../components/ui/GenericModal'; // adjust path as needed
+import Modal from '../components/ui/GenericModal';
 import Button from "../components/ui/Button";
 import Pagination from "../components/ui/Pagination";
 import axiosInstance from '../api/axiosInstance';
 import { DoctorIdContext } from '../App';
 import Loading from "../components/ui/Loading";
+import { FiSearch, FiFilter, FiPrinter } from "react-icons/fi";
+import { toast } from 'react-toastify';
+import { printInvoice } from '../utils/printInvoice';
 
 const columns = [
   { label: "Invoice ID", accessor: "id" },
@@ -28,27 +31,42 @@ const Invoice = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 7, total: 0 });
-   const [showMoreOptions, setShowMoreOptions] = useState(false);
+    const [pagination, setPagination] = useState({ page: 1, limit: 7, total: 0 });
+  const [showFilters, setShowFilters] = useState(false);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [loadingInvoiceId, setLoadingInvoiceId] = useState(null);
 
   const [invoicesData, setInvoicesData] = useState([]);
   const doctorId = useContext(DoctorIdContext);
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, page: 1 }));
-  }, [searchTerm]);
+  }, [searchTerm, statusFilter, dateFilter, modeFilter]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!doctorId) return;
     setLoading(true);
     setError("");
-    axiosInstance.get(`/${doctorId}/invoice?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`)
+    
+    // Build query parameters
+    const params = new URLSearchParams({
+      page: pagination.page.toString(),
+      limit: pagination.limit.toString(),
+      searchQuery: searchTerm,
+      statusFilter: statusFilter !== "All" ? statusFilter : "",
+      dateFilter: dateFilter !== "All" ? dateFilter : "",
+      modeFilter: modeFilter !== "All" ? modeFilter : ""
+    });
+    
+    axiosInstance.get(`/${doctorId}/invoice?${params.toString()}`)
       .then(res => {
         const invoices = Array.isArray(res.data.invoices) ? res.data.invoices : [];
         const mapped = invoices.map(inv => ({
           id: inv.invoiceId || inv._id,
+          _id: inv._id,
           name: inv.name,
           date: inv.createdAt ? inv.createdAt.slice(0, 10) : '',
           amount: inv.totalAmount,
@@ -61,13 +79,14 @@ const Invoice = () => {
           total: res.data.pagination?.total || mapped.length
         }));
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Error fetching invoices:', err);
         setInvoicesData([]);
         setPagination(prev => ({ ...prev, total: 0 }));
         setError("Failed to fetch invoices. Please try again.");
       })
       .finally(() => setLoading(false));
-  }, [doctorId, pagination.page, pagination.limit, searchTerm]);
+  }, [doctorId, pagination.page, pagination.limit, searchTerm, statusFilter, dateFilter, modeFilter]);
 
   const emptyForm = {
     uid: "",
@@ -99,16 +118,36 @@ const Invoice = () => {
   };
 
   const handleCreateOrUpdateInvoice = () => {
+    // Validation
+    if (!formData.uid.trim()) {
+      toast.error("UID is required");
+      return;
+    }
     if (formData.uid.trim().length < 3) {
-      alert("UID should be at least 3 characters long");
+      toast.error("UID should be at least 3 characters long");
+      return;
+    }
+    if (!formData.name.trim()) {
+      toast.error("Name is required");
       return;
     }
     if (formData.name.trim().length < 3) {
-      alert("Name should be at least 3 characters long");
+      toast.error("Name should be at least 3 characters long");
+      return;
+    }
+    if (!formData.phone.trim()) {
+      toast.error("Phone number is required");
       return;
     }
     if (!/^\d{10}$/.test(formData.phone)) {
-      alert("Phone number must be exactly 10 digits");
+      toast.error("Phone number must be exactly 10 digits");
+      return;
+    }
+    
+    // Validate services
+    const validServices = formData.services.filter(s => s.service.trim() && s.amount > 0);
+    if (validServices.length === 0) {
+      toast.error("At least one service with amount is required");
       return;
     }
 
@@ -118,16 +157,29 @@ const Invoice = () => {
 
     setLoading(true);
     setError("");
-    if (isEditing) {
-      // You can implement update logic here if needed
-      setLoading(false);
-      setIsModalOpen(false);
-      setIsEditing(false);
-      setEditingInvoiceId(null);
-      setFormData(emptyForm);
-      return;
-    } else {
-      axiosInstance.post(`/${doctorId}/invoice`, {
+         if (isEditing) {
+       // Update existing invoice
+       const updateUrl = `/${doctorId}/invoice/${editingInvoiceId}`;
+       console.log('Updating invoice with URL:', updateUrl);
+       console.log('Update data:', {
+         name: formData.name,
+         uid: formData.uid,
+         phone: formData.phone,
+         paymentStatus: formData.paymentStatus,
+         privateNote: formData.privateNotes,
+         items: formData.services.map(s => ({
+           service: s.service,
+           quantity: s.qty,
+           amount: s.amount,
+           discount: s.discount,
+         })),
+         additionalDiscountAmount: parseFloat(formData.additionalDiscount) || 0,
+         totalAmount: parseFloat(total) || 0,
+         paymentMode: formData.paymentMode,
+         patientNote: formData.patientNote,
+       });
+       
+       axiosInstance.put(updateUrl, {
         name: formData.name,
         uid: formData.uid,
         phone: formData.phone,
@@ -144,17 +196,65 @@ const Invoice = () => {
         paymentMode: formData.paymentMode,
         patientNote: formData.patientNote,
       })
-      .then(() => {
-        setPagination(prev => ({ ...prev })); // triggers useEffect to refetch
+             .then((res) => {
+         console.log('Invoice updated successfully:', res.data);
+         toast.success("Invoice updated successfully!");
+         setPagination(prev => ({ ...prev })); // triggers useEffect to refetch
+       })
+       .catch((err) => {
+         console.error('Update invoice error:', err);
+         console.error('Error response:', err.response);
+         console.error('Error status:', err.response?.status);
+         console.error('Error data:', err.response?.data);
+         
+         const msg =
+           (Array.isArray(err?.response?.data) && err.response.data[0]?.message) ||
+           err?.response?.data?.message ||
+           err?.message ||
+           'Failed to update invoice';
+         toast.error(msg);
+         setError(msg);
+       })
+      .finally(() => {
+        setLoading(false);
+        setIsModalOpen(false);
+        setIsEditing(false);
+        setEditingInvoiceId(null);
+        setFormData(emptyForm);
+      });
+      return;
+    } else {
+             axiosInstance.post(`/${doctorId}/invoice`, {
+        name: formData.name,
+        uid: formData.uid,
+        phone: formData.phone,
+        paymentStatus: formData.paymentStatus,
+        privateNote: formData.privateNotes,
+        items: formData.services.map(s => ({
+          service: s.service,
+          quantity: s.qty,
+          amount: s.amount,
+          discount: s.discount,
+        })),
+        additionalDiscountAmount: parseFloat(formData.additionalDiscount) || 0,
+        totalAmount: parseFloat(total) || 0,
+        paymentMode: formData.paymentMode,
+        patientNote: formData.patientNote,
       })
-      .catch((err) => {
-        const msg =
-          (Array.isArray(err?.response?.data) && err.response.data[0]?.message) ||
-          err?.response?.data?.message ||
-          err?.message ||
-          'Failed to create invoice';
-        setError(msg);
-      })
+             .then((res) => {
+         console.log('Invoice created successfully:', res.data);
+         toast.success("Invoice created successfully!");
+         setPagination(prev => ({ ...prev })); // triggers useEffect to refetch
+       })
+       .catch((err) => {
+         const msg =
+           (Array.isArray(err?.response?.data) && err.response.data[0]?.message) ||
+           err?.response?.data?.message ||
+           err?.message ||
+           'Failed to create invoice';
+         toast.error(msg);
+         setError(msg);
+       })
       .finally(() => {
         setLoading(false);
         setIsModalOpen(false);
@@ -165,66 +265,197 @@ const Invoice = () => {
     }
   };
 
-  const openEditModal = (invoice) => {
-    setFormData({
-      uid: "",
-      name: invoice.name,
-      phone: "",
-      paymentStatus: invoice.status,
-      privateNotes: "",
-      services: [{ service: "", qty: 1, amount: invoice.amount, discount: 0 }],
-      additionalDiscount: "",
-      paymentMode: invoice.mode,
-      patientNote: "",
-    });
-    setEditingInvoiceId(invoice.id);
-    setIsEditing(true);
-    setIsModalOpen(true);
+  const handlePrintInvoice = async (invoice) => {
+    try {
+      setLoading(true);
+      // Fetch complete invoice data for printing
+      const response = await axiosInstance.get(`/${doctorId}/invoice/${invoice._id || invoice.id}/print`);
+      const invoiceData = response.data.invoice;
+      
+      // Mock doctor info - you can replace this with actual doctor data
+      const doctorInfo = {
+        clinicName: "Medical Clinic",
+        phone: "+91 98765 43210",
+        email: "clinic@example.com",
+        address: "123 Medical Center, City, State - 123456"
+      };
+      
+      printInvoice(invoiceData, doctorInfo);
+      toast.success("Invoice print window opened!");
+    } catch (error) {
+      console.error('Error printing invoice:', error);
+      toast.error("Failed to print invoice. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // const filteredInvoices = invoicesData.filter((invoice) => {
-  //   const searchMatch =
-  //     invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //     invoice.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const openEditModal = (invoice) => {
+    if (!invoice || (!invoice._id && !invoice.id)) {
+      toast.error("Invalid invoice data");
+      return;
+    }
+    
+    const invoiceId = invoice._id || invoice.id;
+    setIsLoadingInvoice(true);
+    setLoadingInvoiceId(invoiceId);
+    setError("");
+    
+    // Fetch complete invoice data from backend
+    console.log('Fetching invoice with ID:', invoiceId);
+    
+    axiosInstance.get(`/${doctorId}/invoice/${invoiceId}`)
+      .then(res => {
+        console.log('Invoice data received:', res.data);
+        const invoiceData = res.data.invoice || res.data; // Handle both response formats
+        
+        // Ensure we have all the required data
+        if (!invoiceData) {
+          throw new Error('No invoice data received');
+        }
+        
+        setFormData({
+          uid: invoiceData.uid || "",
+          name: invoiceData.name || "",
+          phone: invoiceData.phone || "",
+          paymentStatus: invoiceData.paymentStatus || "Billed",
+          privateNotes: invoiceData.privateNote || "",
+          services: invoiceData.items && invoiceData.items.length > 0 ? invoiceData.items.map(item => ({
+            service: item.service || "",
+            qty: item.quantity || 1,
+            amount: item.amount || 0,
+            discount: item.discount || 0,
+          })) : [{ service: "", qty: 1, amount: 0, discount: 0 }],
+          additionalDiscount: invoiceData.additionalDiscountAmount || "",
+          paymentMode: invoiceData.paymentMode || "Cash",
+          patientNote: invoiceData.patientNote || "",
+        });
+        
+        setEditingInvoiceId(invoiceId);
+        setIsEditing(true);
+        setIsModalOpen(true);
+        toast.success("Invoice data loaded successfully!");
+      })
+       .catch((err) => {
+         console.error('Error fetching invoice:', err);
+         const msg =
+           (Array.isArray(err?.response?.data) && err.response.data[0]?.message) ||
+           err?.response?.data?.message ||
+           err?.message ||
+           'Failed to fetch invoice details';
+         toast.error(msg);
+         setError(msg);
+         
+         // Fallback to basic data if fetch fails
+         setFormData({
+           uid: "",
+           name: invoice.name,
+           phone: "",
+           paymentStatus: invoice.status,
+           privateNotes: "",
+           services: [{ service: "", qty: 1, amount: invoice.amount, discount: 0 }],
+           additionalDiscount: "",
+           paymentMode: invoice.mode,
+           patientNote: "",
+         });
+         setEditingInvoiceId(invoiceId);
+         setIsEditing(true);
+         setIsModalOpen(true);
+       })
+       .finally(() => {
+         setIsLoadingInvoice(false);
+         setLoadingInvoiceId(null);
+       });
+  };
 
-  //   const today = new Date();
-  //   const invoiceDate = new Date(invoice.date);
-  //   let dateMatch = true;
-
-  //   if (dateFilter === "Last 30 days") {
-  //     const past = new Date();
-  //     past.setDate(today.getDate() - 30);
-  //     dateMatch = invoiceDate >= past;
-  //   } else if (dateFilter === "Last 90 days") {
-  //     const past = new Date();
-  //     past.setDate(today.getDate() - 90);
-  //     dateMatch = invoiceDate >= past;
-  //   }
-
-  //   const statusMatch = statusFilter === "All" || invoice.status === statusFilter;
-  //   const modeMatch = modeFilter === "All" || invoice.mode === modeFilter;
-
-  //   return searchMatch && dateMatch && statusMatch && modeMatch;
-  // });
-  const filteredInvoices = invoicesData;
-  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
+  // Filter invoices based on search term, status filter, date filter, and mode filter
+  const filteredInvoices = useMemo(() => {
+    let filtered = invoicesData;
+    
+    // Apply status filter first
+    if (statusFilter !== "All") {
+      filtered = filtered.filter(invoice => invoice.status === statusFilter);
+    }
+    
+    // Apply date filter
+    if (dateFilter !== "All") {
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      filtered = filtered.filter(invoice => {
+        const invoiceDate = new Date(invoice.date);
+        
+        switch (dateFilter) {
+          case "Today":
+            return invoiceDate >= todayStart;
+          case "Last 7 days":
+            const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return invoiceDate >= sevenDaysAgo;
+          case "Last 30 days":
+            const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return invoiceDate >= thirtyDaysAgo;
+          case "Last 90 days":
+            const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+            return invoiceDate >= ninetyDaysAgo;
+          case "This month":
+            const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            return invoiceDate >= thisMonthStart;
+          case "Last month":
+            const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+            return invoiceDate >= lastMonthStart && invoiceDate <= lastMonthEnd;
+          default:
+            return true;
+        }
+      });
+    }
+    
+    // Apply payment mode filter
+    if (modeFilter !== "All") {
+      filtered = filtered.filter(invoice => invoice.mode === modeFilter);
+    }
+    
+    // Then apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(invoice => {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          invoice.id.toLowerCase().includes(searchLower) ||
+          invoice.name.toLowerCase().includes(searchLower) ||
+          invoice.status.toLowerCase().includes(searchLower) ||
+          invoice.mode.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [invoicesData, searchTerm, statusFilter, dateFilter, modeFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pagination.limit));
 
   // KPI calculations
   const kpiData = useMemo(() => {
-    // Filter invoices for this month
     const now = new Date();
     const thisMonth = now.getMonth();
     const thisYear = now.getFullYear();
+    
     const invoicesThisMonth = invoicesData.filter(inv => {
       const d = new Date(inv.date);
       return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
     });
+    
     const totalInvoicesThisMonth = invoicesThisMonth.length;
     const totalRevenue = invoicesData.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+    
+    // Calculate pending payments (Unbilled + Partially Paid)
     const pendingPayments = invoicesData
-      .filter(inv => inv.status && inv.status.toLowerCase().includes('pending'))
+      .filter(inv => inv.status && ['Unbilled', 'Partially Paid'].includes(inv.status))
       .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
-    // Dummy percent changes for now
+    
+    // Calculate paid amount
+    const paidAmount = invoicesData
+      .filter(inv => inv.status && inv.status === 'Paid')
+      .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+    
     return [
       {
         label: 'Total Invoices This Month',
@@ -243,12 +474,12 @@ const Invoice = () => {
         color: '#fbcfe8',
       },
       {
-        label: 'Pending Payments',
-        value: `₹ ${pendingPayments.toLocaleString()}`,
-        change: '-2%',
-        changeType: 'negative',
-        icon: '/pending.svg',
-        color: '#fef9c3',
+        label: 'Paid Amount',
+        value: `₹ ${paidAmount.toLocaleString()}`,
+        change: '+8%',
+        changeType: 'positive',
+        icon: '/paid.svg',
+        color: '#dcfce7',
       },
     ];
   }, [invoicesData]);
@@ -270,8 +501,24 @@ const Invoice = () => {
         <Header />
         <main className="flex-1 p-2 bg-white overflow-y-auto relative">
           <div className="max-w-[90%] mx-auto py-8 space-y-10">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl leading-10 font-semibold text-[#322e45]">Invoices</h1>
+                         <div className="flex justify-between items-center mb-6">
+                               <div>
+                  <h1 className="text-3xl leading-10 font-semibold text-[#322e45]">Invoices</h1>
+                  {(statusFilter !== "All" || dateFilter !== "All" || modeFilter !== "All") && (
+                    <div className="text-sm text-gray-600 mt-1">
+                      <span>Filtered by: </span>
+                      {statusFilter !== "All" && (
+                        <span className="font-medium text-blue-600 mr-2">{statusFilter}</span>
+                      )}
+                      {dateFilter !== "All" && (
+                        <span className="font-medium text-green-600 mr-2">{dateFilter}</span>
+                      )}
+                      {modeFilter !== "All" && (
+                        <span className="font-medium text-purple-600">{modeFilter}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               <Button
                 onClick={() => {
                   setIsModalOpen(true);
@@ -283,37 +530,226 @@ const Invoice = () => {
                 + Create Invoice
               </Button>
             </div>
-
-            {/* KPIs Section - use shared KPISection for Dashboard style */}
-            <div className="w-max-lg mx-auto mb-8">
-              <KPISection kpis={kpiData} loading={loading} loadingCount={4} />
-            </div>
-
-            <GenericTable
-              columns={columns}
-              data={invoicesData}
-              loading={loading}
-              loadingRows={8}
-              renderCell={(row, accessor) => {
-                if (accessor === "status") {
-                  return <span className="text-sm px-3 py-1">{row.status}</span>;
-                }
-                if (["name", "mode", "date"].includes(accessor)) {
-                  return <span className="text-sm text-[#69598C] px-3 py-1">{row[accessor]}</span>;
-                }
-                if (accessor === "action") {
-                  return (
+            
+                         {/* Status Capsules and Search */}
+             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-6">
+               {/* Status Capsules */}
+               <div className="flex flex-wrap gap-3">
+                                   {(statusFilter !== "All" || dateFilter !== "All" || modeFilter !== "All") && (
+                    <div className="text-sm text-gray-600 mb-2 w-full">
+                      Showing {filteredInvoices.length} of {invoicesData.length} invoices
+                    </div>
+                  )}
+                <button
+                  onClick={() => setStatusFilter("All")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    statusFilter === "All"
+                      ? "bg-blue-100 text-blue-800 border-2 border-blue-300"
+                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                  }`}
+                >
+                  All ({invoicesData.length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("Billed")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    statusFilter === "Billed"
+                      ? "bg-blue-100 text-blue-800 border-2 border-blue-300"
+                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                  }`}
+                >
+                  Billed ({invoicesData.filter(inv => inv.status === 'Billed').length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("Unbilled")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    statusFilter === "Unbilled"
+                      ? "bg-orange-100 text-orange-800 border-2 border-orange-300"
+                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                  }`}
+                >
+                  Unbilled ({invoicesData.filter(inv => inv.status === 'Unbilled').length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("Partially Paid")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    statusFilter === "Partially Paid"
+                      ? "bg-red-100 text-red-800 border-2 border-red-300"
+                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                  }`}
+                >
+                  Partially Paid ({invoicesData.filter(inv => inv.status === 'Partially Paid').length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("Paid")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    statusFilter === "Paid"
+                      ? "bg-green-100 text-green-800 border-2 border-green-300"
+                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                  }`}
+                >
+                  Paid ({invoicesData.filter(inv => inv.status === 'Paid').length})
+                </button>
+              </div>
+              
+              {/* Search and Filter */}
+              <div className="flex gap-3 items-center">
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search invoices..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                                                   <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      showFilters ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    <FiFilter />
+                    {showFilters ? 'Hide Filters' : 'Filters'}
+                  </button>
+                  {(statusFilter !== "All" || dateFilter !== "All" || modeFilter !== "All") && (
                     <button
-                      className="text-[#5e3bea] hover:underline text-sm font-medium"
-                      onClick={() => openEditModal(row)}
+                      onClick={() => {
+                        setStatusFilter("All");
+                        setDateFilter("All");
+                        setModeFilter("All");
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
                     >
-                      View / Edit
+                      Clear All Filters
                     </button>
-                  );
-                }
-                return <span className="text-sm text-gray-800">{row[accessor]}</span>;
-              }}
-            />
+                  )}
+              </div>
+            </div>
+            
+                         {/* Additional Filters */}
+             {showFilters && (
+               <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                       Date Range
+                       {dateFilter !== "All" && (
+                         <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                           Active
+                         </span>
+                       )}
+                     </label>
+                     <select
+                       value={dateFilter}
+                       onChange={(e) => setDateFilter(e.target.value)}
+                       className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                         dateFilter !== "All" ? "border-green-300 bg-green-50" : "border-gray-300"
+                       }`}
+                     >
+                       <option value="All">All Time</option>
+                       <option value="Today">Today</option>
+                       <option value="Last 7 days">Last 7 days</option>
+                       <option value="Last 30 days">Last 30 days</option>
+                       <option value="Last 90 days">Last 90 days</option>
+                       <option value="This month">This month</option>
+                       <option value="Last month">Last month</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                       Payment Mode
+                       {modeFilter !== "All" && (
+                         <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                           Active
+                         </span>
+                       )}
+                     </label>
+                     <select
+                       value={modeFilter}
+                       onChange={(e) => setModeFilter(e.target.value)}
+                       className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                         modeFilter !== "All" ? "border-purple-300 bg-purple-50" : "border-gray-300"
+                       }`}
+                     >
+                       <option value="All">All Modes</option>
+                       <option value="Cash">Cash</option>
+                       <option value="Credit Card">Credit Card</option>
+                       <option value="UPI">UPI</option>
+                       <option value="Online">Online</option>
+                     </select>
+                   </div>
+                 </div>
+               </div>
+             )}
+
+                         {/* KPIs Section */}
+             <div className="w-full mx-auto mb-8">
+               <KPISection kpis={kpiData} loading={loading} loadingCount={3} />
+             </div>
+
+                         <GenericTable
+               columns={columns}
+               data={filteredInvoices}
+               loading={loading}
+               loadingRows={8}
+               renderCell={(row, accessor) => {
+                 if (accessor === "status") {
+                   const statusColors = {
+                     'Billed': 'bg-blue-100 text-blue-800',
+                     'Unbilled': 'bg-orange-100 text-orange-800',
+                     'Partially Paid': 'bg-red-100 text-red-800',
+                     'Paid': 'bg-green-100 text-green-800'
+                   };
+                   return (
+                     <span className={`text-sm px-3 py-1 rounded-full font-medium ${statusColors[row.status] || 'bg-gray-100 text-gray-800'}`}>
+                       {row.status}
+                     </span>
+                   );
+                 }
+                 if (["name", "mode", "date"].includes(accessor)) {
+                   const value = row[accessor];
+                   if (searchTerm && value.toLowerCase().includes(searchTerm.toLowerCase())) {
+                     const parts = value.split(new RegExp(`(${searchTerm})`, 'gi'));
+                     return (
+                       <span className="text-sm text-[#69598C] px-3 py-1">
+                         {parts.map((part, index) => 
+                           part.toLowerCase() === searchTerm.toLowerCase() ? 
+                             <mark key={index} className="bg-yellow-200 rounded px-1">{part}</mark> : 
+                             part
+                         )}
+                       </span>
+                     );
+                   }
+                   return <span className="text-sm text-[#69598C] px-3 py-1">{value}</span>;
+                 }
+                                   if (accessor === "action") {
+                    const isThisInvoiceLoading = loadingInvoiceId === (row._id || row.id);
+                    return (
+                      <div className="flex gap-2">
+                        <button
+                          className="text-[#5e3bea] hover:underline text-sm font-medium disabled:opacity-50"
+                          onClick={() => openEditModal(row)}
+                          disabled={isLoadingInvoice}
+                        >
+                          {isThisInvoiceLoading ? 'Loading...' : 'View / Edit'}
+                        </button>
+                        <button
+                          className="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50 flex items-center gap-1"
+                          onClick={() => handlePrintInvoice(row)}
+                          disabled={loading}
+                          title="Print Invoice"
+                        >
+                          <FiPrinter size={14} />
+                          Print
+                        </button>
+                      </div>
+                    );
+                  }
+                 return <span className="text-sm text-gray-800">{row[accessor]}</span>;
+               }}
+             />
 
             {/* Always render Pagination, even if only one page */}
             <Pagination
@@ -460,12 +896,13 @@ const Invoice = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleCreateOrUpdateInvoice}
-                  className="px-5 py-2 rounded-md bg-[#6842ff] text-white hover:bg-[#472dc4]"
-                >
-                  {isEditing ? "Update Invoice" : "Create Invoice"}
-                </button>
+                                 <button
+                   onClick={handleCreateOrUpdateInvoice}
+                   disabled={loading}
+                   className="px-5 py-2 rounded-md bg-[#6842ff] text-white hover:bg-[#472dc4] disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Invoice" : "Create Invoice")}
+                 </button>
               </div>
             </div>
           </div>

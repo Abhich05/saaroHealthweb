@@ -109,6 +109,8 @@ const endConsultationOfPrescription = async (doctorId, patientId, prescriptionDa
       status: 'draft',
     }, {
       ...prescriptionData,
+      status: 'complete',
+      consultationDate: new Date(),
     }, {
       new: true,
     });
@@ -117,9 +119,11 @@ const endConsultationOfPrescription = async (doctorId, patientId, prescriptionDa
       prescription = new Prescription({
         doctorId,
         patientId,
+        status: 'complete',
+        consultationDate: new Date(),
         ...prescriptionData,
       });
-      prescription.save();
+      await prescription.save();
     }
 
     const patient = await Patient.findByIdAndUpdate(patientId, {
@@ -211,13 +215,51 @@ const endConsultationOfPrescription = async (doctorId, patientId, prescriptionDa
   }
 }
 
+// New function to save consultation data as past visit
+const saveConsultationAsPastVisit = async (doctorId, patientId, consultationData) => {
+  try {
+    // Create a new prescription with complete status
+    const prescription = new Prescription({
+      doctorId,
+      patientId,
+      status: 'complete',
+      consultationDate: new Date(),
+      ...consultationData,
+    });
+
+    await prescription.save();
+
+    // Update patient's last visit
+    await Patient.findByIdAndUpdate(patientId, {
+      updatedAt: new Date(),
+    }, { new: true });
+
+    // Update doctor-patient relationship
+    const doc = await DoctorPatient.findOne({ doctorId, patientId });
+    if (doc) {
+      doc.updatedAt = new Date();
+      await doc.save();
+    }
+
+    return {
+      statusCode: 201,
+      prescription: prescription,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error,
+    };
+  }
+}
+
 const getPrescriptionsByPatientId = async ( doctorId, patientId ) => {
   try {
     const prescriptions = await Prescription.find({
       doctorId,
       patientId,
       status: 'complete'
-    }).sort({ updatedAt: -1 });
+    }).sort({ consultationDate: -1, updatedAt: -1 });
 
     return {
       statusCode: 200,
@@ -258,9 +300,35 @@ const getDraftPrescriptionOfPatient = async ( doctorId, patientId ) => {
   }
 }
 
+// New function to get patient's consultation history
+const getPatientConsultationHistory = async (doctorId, patientId) => {
+  try {
+    const consultations = await Prescription.find({
+      doctorId,
+      patientId,
+      status: 'complete'
+    })
+    .populate('doctorId', 'name specialization')
+    .sort({ consultationDate: -1 })
+    .select('consultationDate consultationType vitals complaints diagnosis medication advice notes status');
+
+    return {
+      statusCode: 200,
+      consultations: consultations,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error,
+    };
+  }
+}
+
 module.exports = {
   createPrescription,
   endConsultationOfPrescription,
+  saveConsultationAsPastVisit,
   getPrescriptionsByPatientId,
   getDraftPrescriptionOfPatient,
+  getPatientConsultationHistory,
 };

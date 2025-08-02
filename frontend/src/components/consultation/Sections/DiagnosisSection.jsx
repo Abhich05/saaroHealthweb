@@ -1,7 +1,7 @@
-{/*import React from 'react';
+import React, { useEffect } from 'react';
 import DraggableSection from '../DraggableSection';
-import { MdDeleteOutline } from 'react-icons/md';
 import { RxDragHandleDots2 } from 'react-icons/rx';
+import { MdDeleteOutline } from 'react-icons/md';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const SortableDiagnosisInput = ({ id, index, type, value, onChange, onDelete, disabled, dragDisabled }) => {
+const SortableDiagnosisInput = ({ id, index, value, onChange, onDelete, dragDisabled, hideDelete, label }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
   const style = {
@@ -20,150 +20,7 @@ const SortableDiagnosisInput = ({ id, index, type, value, onChange, onDelete, di
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-start gap-2 mt-2">
-      {!dragDisabled && (
-        <div {...attributes} {...listeners} className="cursor-grab text-[#7047d1] mt-6">
-          <RxDragHandleDots2 size={20} />
-        </div>
-      )}
-      <div className="flex-1">
-        <label className="mb-1 font-medium block">
-          {type} {index + 1}
-        </label>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={`Enter ${type} diagnosis`}
-          className="w-full border p-2 rounded bg-gray-100 placeholder-[#69578F]"
-        />
-      </div>
-      {!disabled && (
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-red-500 mt-6"
-          title="Delete"
-        >
-          <MdDeleteOutline size={22} />
-        </button>
-      )}
-    </div>
-  );
-};
-
-const DiagnosisSection = ({ formData, setFormData, isConfigMode }) => {
-  const handleChange = (type, value, index) => {
-    const updated = [...formData.diagnosis[type]];
-    updated[index].value = value;
-
-    const isLast = index === updated.length - 1;
-    const hasText = value.trim() !== '';
-
-    if (isLast && hasText) {
-      updated.push({ id: crypto.randomUUID(), value: '' });
-    }
-
-    setFormData({
-      ...formData,
-      diagnosis: {
-        ...formData.diagnosis,
-        [type]: updated,
-      },
-    });
-  };
-
-  const handleDelete = (type, index) => {
-    const updated = [...formData.diagnosis[type]];
-    if (updated.length === 1) return;
-    updated.splice(index, 1);
-
-    setFormData({
-      ...formData,
-      diagnosis: {
-        ...formData.diagnosis,
-        [type]: updated,
-      },
-    });
-  };
-
-  const handleDragEnd = (event, type) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const items = formData.diagnosis[type];
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
-
-    const reordered = arrayMove(items, oldIndex, newIndex);
-    setFormData({
-      ...formData,
-      diagnosis: {
-        ...formData.diagnosis,
-        [type]: reordered,
-      },
-    });
-  };
-
-  return (
-    <DraggableSection key="diagnosis" id="diagnosis" enabled={isConfigMode}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {["provisional", "final"].map((type) => (
-          <div key={type}>
-            <div className="font-semibold mb-4 text-[22px]">
-              {type[0].toUpperCase() + type.slice(1)} Diagnosis
-            </div>
-
-            <DndContext onDragEnd={(e) => handleDragEnd(e, type)} collisionDetection={closestCenter}>
-              <SortableContext
-                items={formData.diagnosis[type].map((item) => item.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {formData.diagnosis[type].map((item, i) => (
-                  <SortableDiagnosisInput
-                    key={item.id}
-                    id={item.id}
-                    index={i}
-                    type={type}
-                    value={item.value}
-                    onChange={(val) => handleChange(type, val, i)}
-                    onDelete={() => handleDelete(type, i)}
-                    disabled={formData.diagnosis[type].length === 1}
-                    dragDisabled={isConfigMode}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </div>
-        ))}
-      </div>
-    </DraggableSection>
-  );
-};
-
-export default DiagnosisSection;
-*/}import React, { useEffect } from 'react';
-import DraggableSection from '../DraggableSection';
-import { MdDeleteOutline } from 'react-icons/md';
-import { RxDragHandleDots2 } from 'react-icons/rx';
-import { DndContext, closestCenter } from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-const SortableDiagnosisInput = ({ id, index, type, value, onChange, onDelete, dragDisabled, hideDelete }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-start gap-2 mt-2">
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2">
       {!dragDisabled && (
         <div {...attributes} {...listeners} className="cursor-grab text-[#7047d1] mt-2">
           <RxDragHandleDots2 size={20} />
@@ -172,19 +29,18 @@ const SortableDiagnosisInput = ({ id, index, type, value, onChange, onDelete, dr
       <div className="flex-1">
         <input
           value={value}
-          onChange={(e) => onChange(id, e.target.value)}
-          placeholder={`Enter ${type} diagnosis`}
+          onChange={(e) => onChange(e.target.value, index)}
+          placeholder={`Enter ${label}`}
           className="w-full border p-2 rounded bg-gray-100"
         />
       </div>
       {!hideDelete && (
         <button
-          type="button"
-          onClick={() => onDelete(id)}
-          className="text-red-600 mt-2 ml-1" 
-          title="Delete"
+          className="mt-2 ml-1 text-red-600"
+          onClick={() => onDelete(index)}
+          title="Delete row"
         >
-          <MdDeleteOutline size={20} />
+          <MdDeleteOutline size={20}/>
         </button>
       )}
     </div>
@@ -192,32 +48,49 @@ const SortableDiagnosisInput = ({ id, index, type, value, onChange, onDelete, dr
 };
 
 const DiagnosisSection = ({ formData, setFormData, isConfigMode }) => {
-  // Ensure one row if empty
+  // Start with one row if empty
   useEffect(() => {
-    const updated = { ...formData.diagnosis };
-    let needsUpdate = false;
-
-    ['provisional', 'final'].forEach((type) => {
-      if (updated[type].length === 0) {
-        updated[type] = [{ id: crypto.randomUUID(), value: '' }];
-        needsUpdate = true;
-      }
-    });
-
-    if (needsUpdate) {
-      setFormData({ ...formData, diagnosis: updated });
+    if (formData.diagnosis.provisional.length === 0) {
+      setFormData({
+        ...formData,
+        diagnosis: {
+          ...formData.diagnosis,
+          provisional: [{ id: crypto.randomUUID(), value: '' }],
+          final: [{ id: crypto.randomUUID(), value: '' }]
+        }
+      });
     }
   }, []);
 
-  const handleChange = (type, id, value) => {
-    const updated = formData.diagnosis[type].map((item) =>
-      item.id === id ? { ...item, value } : item
-    );
+  const handleChange = (type, value, index) => {
+    const updated = [...formData.diagnosis[type]];
+    updated[index] = { ...updated[index], value };
 
-    const targetIndex = updated.findIndex((item) => item.id === id);
-    const isLast = targetIndex === updated.length - 1;
-
+    const isLast = index === formData.diagnosis[type].length - 1;
     if (isLast && value.trim() !== '') {
+      setFormData({
+        ...formData,
+        diagnosis: {
+          ...formData.diagnosis,
+          [type]: [...formData.diagnosis[type], { id: crypto.randomUUID(), value: '' }]
+        }
+      });
+    } else {
+      setFormData({
+        ...formData,
+        diagnosis: {
+          ...formData.diagnosis,
+          [type]: updated
+        }
+      });
+    }
+  };
+
+  const handleDelete = (type, index) => {
+    const updated = [...formData.diagnosis[type]];
+    updated.splice(index, 1);
+    
+    if (updated.length === 0) {
       updated.push({ id: crypto.randomUUID(), value: '' });
     }
 
@@ -225,75 +98,89 @@ const DiagnosisSection = ({ formData, setFormData, isConfigMode }) => {
       ...formData,
       diagnosis: {
         ...formData.diagnosis,
-        [type]: updated,
-      },
-    });
-  };
-
-  const handleDelete = (type, idToDelete) => {
-    const updated = formData.diagnosis[type].filter((item) => item.id !== idToDelete);
-    setFormData({
-      ...formData,
-      diagnosis: {
-        ...formData.diagnosis,
-        [type]: updated,
-      },
+        [type]: updated
+      }
     });
   };
 
   const handleDragEnd = (event, type) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const items = formData.diagnosis[type];
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
-
-    const reordered = arrayMove(items, oldIndex, newIndex);
-    setFormData({
-      ...formData,
-      diagnosis: {
-        ...formData.diagnosis,
-        [type]: reordered,
-      },
-    });
+    if (!over) return;
+    if (active.id !== over.id) {
+      const oldIndex = formData.diagnosis[type].findIndex((item) => item.id === active.id);
+      const newIndex = formData.diagnosis[type].findIndex((item) => item.id === over.id);
+      const newOrder = arrayMove(formData.diagnosis[type], oldIndex, newIndex);
+      setFormData({
+        ...formData,
+        diagnosis: {
+          ...formData.diagnosis,
+          [type]: newOrder
+        }
+      });
+    }
   };
 
   return (
-    <DraggableSection key="diagnosis" id="diagnosis" enabled={isConfigMode}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {['provisional', 'final'].map((type) => (
-          <div key={type}>
-            <div className="font-semibold mb-4 text-[22px]">
-              {type[0].toUpperCase() + type.slice(1)} Diagnosis
-            </div>
+    <DraggableSection id="diagnosis" enabled={isConfigMode}>
+      <div className="space-y-6">
+        {/* Provisional Diagnosis */}
+        <div>
+          <h2 className="font-semibold mb-4 text-[22px]">Provisional Diagnosis</h2>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => handleDragEnd(event, 'provisional')}
+          >
+            <SortableContext
+              items={formData.diagnosis.provisional.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {formData.diagnosis.provisional.map((diagnosis, index) => (
+                <SortableDiagnosisInput
+                  key={diagnosis.id}
+                  id={diagnosis.id}
+                  index={index}
+                  value={diagnosis.value}
+                  onChange={(value) => handleChange('provisional', value, index)}
+                  onDelete={(index) => handleDelete('provisional', index)}
+                  dragDisabled={isConfigMode}
+                  hideDelete={isConfigMode}
+                  label="Provisional Diagnosis"
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
 
-            <DndContext onDragEnd={(e) => handleDragEnd(e, type)} collisionDetection={closestCenter}>
-              <SortableContext
-                items={formData.diagnosis[type].map((item) => item.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {formData.diagnosis[type].map((item, i) => (
-                  <SortableDiagnosisInput
-                    key={item.id}
-                    id={item.id}
-                    index={i}
-                    type={type}
-                    value={item.value}
-                    onChange={(id, val) => handleChange(type, id, val)}
-                    onDelete={(id) => handleDelete(type, id)}
-                    dragDisabled={isConfigMode}
-                    hideDelete={formData.diagnosis[type].length === 1 && i === 0}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </div>
-        ))}
+        {/* Final Diagnosis */}
+        <div>
+          <h2 className="font-semibold mb-4 text-[22px]">Final Diagnosis</h2>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => handleDragEnd(event, 'final')}
+          >
+            <SortableContext
+              items={formData.diagnosis.final.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {formData.diagnosis.final.map((diagnosis, index) => (
+                <SortableDiagnosisInput
+                  key={diagnosis.id}
+                  id={diagnosis.id}
+                  index={index}
+                  value={diagnosis.value}
+                  onChange={(value) => handleChange('final', value, index)}
+                  onDelete={(index) => handleDelete('final', index)}
+                  dragDisabled={isConfigMode}
+                  hideDelete={isConfigMode}
+                  label="Final Diagnosis"
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
       </div>
     </DraggableSection>
   );
 };
 
-export default DiagnosisSection;
-
+export default DiagnosisSection; 

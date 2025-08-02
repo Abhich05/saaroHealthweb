@@ -39,6 +39,28 @@ const endConsultationOfPrescription = async (req, res) => {
   }
 }
 
+// New controller function to save consultation as past visit
+const saveConsultationAsPastVisit = async (req, res) => {
+  try {
+    const consultationData = req.body;
+    const { doctorId, patientId } = req.params;
+
+    const result = await prescriptionService.saveConsultationAsPastVisit(doctorId, patientId, consultationData);
+
+    res
+      .status(result.statusCode)
+      .json({
+        success: result.statusCode === 201,
+        prescription: result.prescription,
+        message: result.statusCode === 201 ? 'Consultation saved successfully' : 'Failed to save consultation'
+      });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 const getPrescriptionsByPatientId = async (req, res) => {
   try {
     const { doctorId, patientId } = req.params;
@@ -75,9 +97,30 @@ const getDraftPrescriptionOfPatient = async (req, res) => {
   }
 }
 
+// New controller function to get patient consultation history
+const getPatientConsultationHistory = async (req, res) => {
+  try {
+    const { doctorId, patientId } = req.params;
+
+    const result = await prescriptionService.getPatientConsultationHistory(doctorId, patientId);
+
+    res
+      .status(result.statusCode)
+      .json({
+        consultations: result.consultations,
+      });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 module.exports = {
   createPrescription,
   endConsultationOfPrescription,
+  saveConsultationAsPastVisit,
   getPrescriptionsByPatientId,
   getDraftPrescriptionOfPatient,
+  getPatientConsultationHistory,
 };

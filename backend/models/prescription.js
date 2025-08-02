@@ -14,6 +14,86 @@ const prescriptionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Patient',
     },
+    // Vitals
+    vitals: {
+      bloodPressure: { type: String, default: '' },
+      pulse: { type: String, default: '' },
+      height: { type: String, default: '' },
+      weight: { type: String, default: '' },
+      temperature: { type: String, default: '' },
+      painScore: { type: String, default: '' },
+      oxygenSaturation: { type: String, default: '' },
+      respiratoryRate: { type: String, default: '' },
+    },
+    // Chief Complaints
+    complaints: [{
+      text: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    // History
+    pastHistory: [{
+      value: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    surgicalHistory: [{
+      value: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    drugAllergy: [{
+      value: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    // Physical Examination
+    physicalExamination: [{
+      text: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    // Diagnosis
+    diagnosis: {
+      provisional: [{
+        value: { type: String, default: '' },
+        id: { type: String, default: '' }
+      }],
+      final: [{
+        value: { type: String, default: '' },
+        id: { type: String, default: '' }
+      }]
+    },
+    // Investigations
+    tests: [{
+      value: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    // Medications
+    medication: [{
+      name: { type: String, default: '' },
+      dosage: { type: String, default: '' },
+      frequency: { type: String, default: '' },
+      duration: { type: String, default: '' },
+      notes: { type: String, default: '' },
+      id: { type: String, default: '' }
+    }],
+    // Advice and Follow-up
+    advice: { type: String, default: '' },
+    followUp: [{
+      type: String,
+      default: ''
+    }],
+    // Custom Sections
+    customSections: [{
+      id: { type: String, required: true },
+      heading: { type: String, required: true },
+      fields: [{
+        label: { type: String, required: true },
+        type: { type: String, required: true },
+        required: { type: Boolean, default: false },
+        values: [{
+          value: { type: String, default: '' },
+          id: { type: String, default: '' }
+        }]
+      }]
+    }],
+    // Legacy fields for backward compatibility
     bloodPressure: {
       type: String,
       default: null,
@@ -192,10 +272,6 @@ const prescriptionSchema = new mongoose.Schema(
         },
       }
     ],
-    // surgeryAdvice: {
-    //   type: String,
-    //   default: null,
-    // },
     surgeryAdvice: {
       name: {
         type: String,
@@ -213,9 +289,24 @@ const prescriptionSchema = new mongoose.Schema(
     status: {
       type: String,
       default: 'draft',
+      enum: ['draft', 'complete', 'archived']
     },
     additionalVitals: [{}],
     additionalSections: [{}],
+    // Consultation metadata
+    consultationDate: {
+      type: Date,
+      default: Date.now,
+    },
+    consultationType: {
+      type: String,
+      default: 'general',
+      enum: ['general', 'followup', 'emergency', 'specialty']
+    },
+    notes: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

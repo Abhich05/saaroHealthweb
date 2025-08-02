@@ -113,9 +113,9 @@ const getInvoicesByDoctorId = async (doctorId, page = 1, limit = 7) => {
   }
 }
 
-const getInvoiceById = async (invoiceId) => {
+const getInvoiceById = async (invoiceId, doctorId) => {
   try {
-    const invoice = await Invoice.findById(invoiceId);
+    const invoice = await Invoice.findOne({ _id: invoiceId, doctorId });
 
     if (!invoice) {
       return {
@@ -136,20 +136,111 @@ const getInvoiceById = async (invoiceId) => {
   }
 }
 
-const deleteInvoiceById = async (invoiceId) => {
+const updateInvoice = async (invoiceId, doctorId, invoiceData) => {
   try {
-    const invoice = await Invoice.findByIdAndDelete(invoiceId);
+    const {
+      name,
+      uid,
+      phone,
+      paymentStatus,
+      privateNote,
+      items,
+      additionalDiscountAmount,
+      totalAmount,
+      paymentMode,
+      patientNote,
+    } = invoiceData;
+
+    const invoiceValidation = validateInvoice(invoiceData);
+    if (!invoiceValidation.success) {
+      return {
+        statusCode: 400,
+        error: invoiceValidation.errors,
+      };
+    }
+
+    const invoice = await Invoice.findOneAndUpdate(
+      { _id: invoiceId, doctorId },
+      {
+        name,
+        uid,
+        phone,
+        paymentStatus,
+        privateNote,
+        items,
+        additionalDiscountAmount,
+        totalAmount,
+        paymentMode,
+        patientNote,
+      },
+      { new: true },
+    );
 
     if (!invoice) {
       return {
         statusCode: 404,
-        error: `Invoice with Id ${invoiceId} not found`,
+        error: 'Invoice not found',
+      };
+    }
+
+    // Regenerate PDF after update
+    await generateInvoicePDF(invoice);
+
+    return {
+      statusCode: 200,
+      invoice,
+      invoiceUrl: `${process.env.SERVER_URL}/public/invoices/invoice_${invoice._id}.pdf`,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error,
+    };
+  }
+}
+
+const deleteInvoiceById = async (invoiceId, doctorId) => {
+  try {
+    const invoice = await Invoice.findOneAndDelete({ _id: invoiceId, doctorId });
+
+    if (!invoice) {
+      return {
+        statusCode: 404,
+        error: 'Invoice not found',
       };
     }
 
     return {
-      statusCode: 204,
+      statusCode: 200,
       invoice: invoice,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error,
+    };
+  }
+}
+
+// New function to print invoice
+const printInvoice = async (invoiceId, doctorId) => {
+  try {
+    const invoice = await Invoice.findOne({ _id: invoiceId, doctorId });
+
+    if (!invoice) {
+      return {
+        statusCode: 404,
+        error: 'Invoice not found',
+      };
+    }
+
+    // Generate or regenerate PDF
+    await generateInvoicePDF(invoice);
+
+    return {
+      statusCode: 200,
+      invoice,
+      pdfUrl: `${process.env.SERVER_URL}/public/invoices/invoice_${invoice._id}.pdf`,
     };
   } catch (error) {
     return {
@@ -163,5 +254,7 @@ module.exports = {
   createInvoice,
   getInvoicesByDoctorId,
   getInvoiceById,
+  updateInvoice,
   deleteInvoiceById,
+  printInvoice,
 };

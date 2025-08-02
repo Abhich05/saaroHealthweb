@@ -5,7 +5,7 @@ import Button from "../components/ui/Button";
 import SearchBar from "../components/ui/SearchBar";
 import { MdDelete } from "react-icons/md";
 import { dummyUsers, defaultRolePermissions } from "../data/dummyUserData";
-import { toast } from "react-toastify";
+// Remove react-toastify import since we're using custom toast system
 import { DoctorIdContext } from '../App';
 import axiosInstance from '../api/axiosInstance';
 import Loading from "../components/ui/Loading";
@@ -36,6 +36,7 @@ const UserManagementPage = () => {
   const doctorId = useContext(DoctorIdContext);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState({ ...emptyUserTemplate });
+  const [originalUser, setOriginalUser] = useState(null); // Store original user data to compare changes
   const [searchQuery, setSearchQuery] = useState("");
   const [errors, setErrors] = useState({ name: false, email: false });
   const [loading, setLoading] = useState(true);
@@ -57,6 +58,7 @@ const UserManagementPage = () => {
 
   const handleSelectUser = (user) => {
     setSelectedUser({ ...user });
+    setOriginalUser({ ...user }); // Store original user data for comparison
     setErrors({ name: false, email: false });
     setShowCredentials(false);
     setNewUserCredentials(null);
@@ -97,6 +99,23 @@ const UserManagementPage = () => {
         [section]: value,
       },
     }));
+  };
+
+  // Function to check if permissions have changed
+  const hasPermissionsChanged = () => {
+    if (!originalUser || !selectedUser) return false;
+    
+    const originalPermissions = originalUser.permissions;
+    const currentPermissions = selectedUser.permissions;
+    
+    // Compare each permission
+    for (const section in originalPermissions) {
+      if (originalPermissions[section] !== currentPermissions[section]) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   const handleAddNewUser = async () => {
@@ -152,19 +171,38 @@ const UserManagementPage = () => {
       setSelectedUser({ ...emptyUserTemplate });
       setErrors({ name: false, email: false });
       
-      toast.success('User added successfully!');
+             window.showToast('User added successfully!', 'success', 3000);
     } catch (err) {
       console.error('Add user error:', err);
       console.error('Error response:', err.response?.data);
-      toast.error(err?.response?.data?.error || 'Failed to add user');
+      window.showToast(err?.response?.data?.error || 'Failed to add user', 'error', 5000);
     }
   };
 
   const handleSave = async () => {
     if (!selectedUser.id && !selectedUser._id) {
-      toast.error("Please add a user first!");
+      window.showToast("Please select a user first!", 'error', 3000);
       return;
     }
+    
+    // Check if permissions have actually changed
+    if (!hasPermissionsChanged()) {
+      window.showToast("No permission changes detected!", 'error', 3000);
+      return;
+    }
+    
+    // Validate that user has a name and email
+    if (!selectedUser.name.trim()) {
+      setErrors(prev => ({ ...prev, name: true }));
+      window.showToast("Please enter a valid name!", 'error', 3000);
+      return;
+    }
+    if (!selectedUser.email.trim()) {
+      setErrors(prev => ({ ...prev, email: true }));
+      window.showToast("Please enter a valid email!", 'error', 3000);
+      return;
+    }
+    
     try {
       const userId = selectedUser._id || selectedUser.id;
       
@@ -188,11 +226,18 @@ const UserManagementPage = () => {
       const res = await axiosInstance.put(`/${doctorId}/users/${userId}`, userData);
       console.log('Save response:', res.data);
       
+      // Update the users list with the updated user data
       setUsers((prev) => prev.map((user) => (user._id === userId || user.id === userId ? res.data.user : user)));
-      toast.success("User permissions updated!");
+      
+             // Update both selected user and original user with the response data
+       setSelectedUser(res.data.user);
+       setOriginalUser(res.data.user);
+       
+               // Show success toast with user name
+        window.showToast(`Permissions updated for ${res.data.user.name} successfully!`, 'success', 3000);
     } catch (err) {
       console.error('Save error:', err);
-      toast.error(err?.response?.data?.error || 'Failed to update user');
+      window.showToast(err?.response?.data?.error || 'Failed to update user permissions', 'error', 5000);
     }
   };
 
@@ -205,7 +250,7 @@ const UserManagementPage = () => {
         setErrors({ name: false, email: false });
       }
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to delete user');
+      window.showToast(err?.response?.data?.error || 'Failed to delete user', 'error', 5000);
     }
   };
 
@@ -402,26 +447,34 @@ const UserManagementPage = () => {
                 )}
               </div>
 
-              <div className="absolute bottom-2 right-3 flex gap-2 mt-4">
-                <button
-                  className="px-4 h-10 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300 transition"
-                  onClick={() => {
-                    setSelectedUser({ ...emptyUserTemplate });
-                    setErrors({ name: false, email: false });
-                    setShowCredentials(false);
-                    setNewUserCredentials(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <Button
-                  className="px-5 h-10 text-white text-sm rounded-md hover:bg-purple-700 transition"
-                  onClick={handleSave}
-                  disabled={!selectedUser}
-                >
-                  Save & Apply
-                </Button>
-              </div>
+                             {/* Only show Save & Apply button when a user is selected */}
+               {(selectedUser?.id || selectedUser?._id) && (
+                 <div className="absolute bottom-2 right-3 flex gap-2 mt-4">
+                   <button
+                     className="px-4 h-10 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300 transition"
+                     onClick={() => {
+                       setSelectedUser({ ...emptyUserTemplate });
+                       setOriginalUser(null);
+                       setErrors({ name: false, email: false });
+                       setShowCredentials(false);
+                       setNewUserCredentials(null);
+                     }}
+                   >
+                     Cancel
+                   </button>
+                   <Button
+                     className={`px-5 h-10 text-sm rounded-md transition ${
+                       hasPermissionsChanged() 
+                         ? 'text-white hover:bg-purple-700' 
+                         : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+                     }`}
+                     onClick={handleSave}
+                     disabled={!hasPermissionsChanged()}
+                   >
+                     Save & Apply
+                   </Button>
+                 </div>
+               )}
             </div>
           </div>
 

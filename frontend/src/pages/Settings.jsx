@@ -9,7 +9,7 @@ import Pagination from '../components/ui/Pagination';
 import { UserContext, DoctorNameContext } from '../App';
 import axiosInstance from '../api/axiosInstance';
 import { toast } from 'react-toastify';
-import Loading from '../components/ui/Loading';
+import SettingsSkeletonLoader from '../components/ui/SettingsSkeletonLoader';
  // <-- your existing Pagination component
 
 const reviewColumns = [
@@ -317,9 +317,7 @@ const Settings = () => {
                             {activeTab === 'profile' && (
                             <div className="space-y-6">
                                 {profileLoading ? (
-                                    <div className="flex justify-center items-center py-8">
-                                        <Loading />
-                                    </div>
+                                    <SettingsSkeletonLoader />
                                 ) : (
                                     <>
                                         <h2 className="text-lg font-semibold text-gray-900">Profile & Availability</h2>

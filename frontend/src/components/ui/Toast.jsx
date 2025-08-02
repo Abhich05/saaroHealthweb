@@ -5,13 +5,13 @@ const Toast = ({ message, type = 'error', duration = 5000, onClose }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // Show toast after a small delay for smooth animation
-    const showTimer = setTimeout(() => setIsVisible(true), 100);
+    // Show toast immediately for fast animation
+    const showTimer = setTimeout(() => setIsVisible(true), 50);
     
     // Auto hide after duration
     const hideTimer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(onClose, 300); // Wait for animation to complete
+      setTimeout(onClose, 200); // Faster animation completion
     }, duration);
 
     return () => {
@@ -62,11 +62,11 @@ const Toast = ({ message, type = 'error', duration = 5000, onClose }) => {
 
   return (
     <div
-      className={`fixed top-4 right-4 z-50 transform transition-all duration-300 ease-out ${
-        isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+      className={`fixed top-4 right-4 z-50 transform transition-all duration-200 ease-out ${
+        isVisible ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
       }`}
     >
-      <div className={`${styles.bg} ${styles.border} border rounded-lg shadow-lg p-4 max-w-sm w-full`}>
+      <div className={`${styles.bg} ${styles.border} border rounded-lg shadow-lg p-4 min-w-80 max-w-md w-full`}>
         <div className="flex items-start">
           <div className={`flex-shrink-0 ${styles.icon}`}>
             <IconComponent className="h-5 w-5" />
@@ -80,7 +80,7 @@ const Toast = ({ message, type = 'error', duration = 5000, onClose }) => {
             <button
               onClick={() => {
                 setIsVisible(false);
-                setTimeout(onClose, 300);
+                setTimeout(onClose, 200);
               }}
               className={`inline-flex ${styles.text} hover:${styles.text.replace('text-', 'bg-').replace('-800', '-100')} rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-50 focus:ring-indigo-600`}
             >

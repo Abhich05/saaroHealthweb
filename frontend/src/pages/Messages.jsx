@@ -5,7 +5,7 @@ import Header from "../components/layout/Header";
 import { contacts } from "../data/MessagesDummyData";
 import { DoctorIdContext } from '../App';
 import axiosInstance from '../api/axiosInstance';
-import Loading from "../components/ui/Loading";
+import MessagesSkeletonLoader from "../components/ui/MessagesSkeletonLoader";
 import useMessagesLogic from "../logic/MessagesLogic";
 
 // Set your WhatsApp Business Account (WABA) number in .env as VITE_WABA_NUMBER=+919999999999
@@ -163,8 +163,26 @@ const Messages = () => {
     }, 1500);
   };
 
-  // 5. Update message rendering for WhatsApp-like UI and actions
-  // Remove full page loading
+  // Show skeleton loader when initially loading contacts
+  if (loading && contacts.length === 0) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 bg-white overflow-hidden">
+            <div className="max-w-[100%] mx-auto h-full flex flex-col">
+              <div className="flex flex-1 overflow-hidden bg-white rounded-lg shadow-lg">
+                <MessagesSkeletonLoader />
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
   if (error) return (
     <div className="flex h-screen items-center justify-center">
       <div className="bg-red-100 text-red-700 p-6 rounded shadow">
@@ -281,8 +299,23 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                     </div>
 
                     <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 scrollbar-none ">
-                      {loading ? (
-                        <p className="text-center py-8">Loading messages...</p>
+                      {loading && contacts.length > 0 ? (
+                        <div className="space-y-4">
+                          {[1, 2, 3].map((item) => (
+                            <div key={item} className="flex items-end gap-2 mb-2 justify-start">
+                              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                              <div className="flex flex-col items-start max-w-lg w-fit">
+                                <div className="relative px-4 py-2 rounded-2xl text-sm shadow bg-white border" style={{ minWidth: "60px" }}>
+                                  <div className="space-y-1">
+                                    <div className="h-3 bg-gray-300 rounded animate-pulse w-32"></div>
+                                    <div className="h-3 bg-gray-300 rounded animate-pulse w-24"></div>
+                                  </div>
+                                  <div className="h-2 bg-gray-300 rounded animate-pulse w-12 mt-1"></div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : error ? (
                         <p className="text-center py-8 text-red-500">{error}</p>
                       ) : messages.length === 0 ? (
