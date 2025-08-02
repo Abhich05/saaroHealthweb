@@ -446,14 +446,9 @@ const Invoice = () => {
     const totalInvoicesThisMonth = invoicesThisMonth.length;
     const totalRevenue = invoicesData.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
     
-    // Calculate pending payments (Unbilled + Partially Paid)
+    // Calculate pending payments (unbilled + partially paid)
     const pendingPayments = invoicesData
-      .filter(inv => inv.status && ['Unbilled', 'Partially Paid'].includes(inv.status))
-      .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
-    
-    // Calculate paid amount
-    const paidAmount = invoicesData
-      .filter(inv => inv.status && inv.status === 'Paid')
+      .filter(inv => inv.status === 'Unbilled' || inv.status === 'Partially Paid')
       .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
     
     return [
@@ -474,11 +469,11 @@ const Invoice = () => {
         color: '#fbcfe8',
       },
       {
-        label: 'Paid Amount',
-        value: `₹ ${paidAmount.toLocaleString()}`,
-        change: '+8%',
-        changeType: 'positive',
-        icon: '/paid.svg',
+        label: 'Pending Payments',
+        value: `₹ ${pendingPayments.toLocaleString()}`,
+        change: '-2%',
+        changeType: 'negative',
+        icon: '/pending.svg',
         color: '#dcfce7',
       },
     ];
@@ -580,16 +575,7 @@ const Invoice = () => {
                 >
                   Partially Paid ({invoicesData.filter(inv => inv.status === 'Partially Paid').length})
                 </button>
-                <button
-                  onClick={() => setStatusFilter("Paid")}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    statusFilter === "Paid"
-                      ? "bg-green-100 text-green-800 border-2 border-green-300"
-                      : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
-                  }`}
-                >
-                  Paid ({invoicesData.filter(inv => inv.status === 'Paid').length})
-                </button>
+
               </div>
               
               {/* Search and Filter */}
@@ -699,8 +685,7 @@ const Invoice = () => {
                    const statusColors = {
                      'Billed': 'bg-blue-100 text-blue-800',
                      'Unbilled': 'bg-orange-100 text-orange-800',
-                     'Partially Paid': 'bg-red-100 text-red-800',
-                     'Paid': 'bg-green-100 text-green-800'
+                     'Partially Paid': 'bg-red-100 text-red-800'
                    };
                    return (
                      <span className={`text-sm px-3 py-1 rounded-full font-medium ${statusColors[row.status] || 'bg-gray-100 text-gray-800'}`}>

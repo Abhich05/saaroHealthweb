@@ -30,7 +30,7 @@ const columns2 = [
 const kpiDefaults = {
   "Total Patients": { icon: "/user.svg", color: "#c7d2fe" },
   "Appointments": { icon: "/calendar.svg", color: "#e9d5ff" },
-  "Revenue": { icon: "/revenue.svg", color: "#fbcfe8" }
+  "Messages": { icon: "/messages.svg", color: "#fbcfe8" }
 };
 
 const mapAppointmentToTableRow = (apt) => ({

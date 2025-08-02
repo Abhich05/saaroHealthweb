@@ -135,8 +135,12 @@ const InvoicePrint = ({ invoice, doctorInfo }) => {
                 fontSize: '12px',
                 fontWeight: 'bold',
                 marginLeft: '8px',
-                backgroundColor: invoice.paymentStatus === 'Paid' ? '#d4edda' : '#f8d7da',
-                color: invoice.paymentStatus === 'Paid' ? '#155724' : '#721c24'
+                backgroundColor: invoice.paymentStatus === 'Billed' ? '#d1ecf1' : 
+                                 invoice.paymentStatus === 'Unbilled' ? '#fff3cd' : 
+                                 invoice.paymentStatus === 'Partially Paid' ? '#f8d7da' : '#f8d7da',
+                color: invoice.paymentStatus === 'Billed' ? '#0c5460' : 
+                       invoice.paymentStatus === 'Unbilled' ? '#856404' : 
+                       invoice.paymentStatus === 'Partially Paid' ? '#721c24' : '#721c24'
               }}>
                 {invoice.paymentStatus || 'Billed'}
               </span>

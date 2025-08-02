@@ -2,6 +2,7 @@ const Invoice = require('../models/invoice');
 const Appointment = require('../models/appointment');
 const Prescription = require('../models/prescription');
 const DoctorPatient = require('../models/doctorPatient');
+const Message = require('../models/message');
 
 const getPatient24HourReport = async (doctorId) => {
   try {
@@ -202,13 +203,11 @@ const getDashboardKPIs = async (doctorId) => {
     const appointmentChange = appointmentsThisMonth - appointmentsLastMonth;
     const appointmentPercentChange = appointmentsLastMonth === 0 ? 0 : ((appointmentChange) / appointmentsLastMonth) * 100;
 
-    // Revenue this month and last month
-    const invoicesThisMonth = await Invoice.find({ doctorId, createdAt: { $gte: thisMonthStart } });
-    const invoicesLastMonth = await Invoice.find({ doctorId, createdAt: { $gte: lastMonthStart, $lt: thisMonthStart } });
-    const revenueThisMonth = invoicesThisMonth.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-    const revenueLastMonth = invoicesLastMonth.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-    const revenueChange = revenueThisMonth - revenueLastMonth;
-    const revenuePercentChange = revenueLastMonth === 0 ? 0 : ((revenueChange) / revenueLastMonth) * 100;
+    // Messages this month and last month
+    const messagesThisMonth = await Message.countDocuments({ doctorId, createdAt: { $gte: thisMonthStart } });
+    const messagesLastMonth = await Message.countDocuments({ doctorId, createdAt: { $gte: lastMonthStart, $lt: thisMonthStart } });
+    const messageChange = messagesThisMonth - messagesLastMonth;
+    const messagePercentChange = messagesLastMonth === 0 ? 0 : ((messageChange) / messagesLastMonth) * 100;
 
     const kpis = [
       {
@@ -224,10 +223,10 @@ const getDashboardKPIs = async (doctorId) => {
         changeType: appointmentPercentChange >= 0 ? 'positive' : 'negative',
       },
       {
-        label: 'Revenue',
-        value: revenueThisMonth,
-        change: (revenuePercentChange >= 0 ? '+' : '') + revenuePercentChange.toFixed(2) + '%',
-        changeType: revenuePercentChange >= 0 ? 'positive' : 'negative',
+        label: 'Messages',
+        value: messagesThisMonth,
+        change: (messagePercentChange >= 0 ? '+' : '') + messagePercentChange.toFixed(2) + '%',
+        changeType: messagePercentChange >= 0 ? 'positive' : 'negative',
       },
     ];
     return { statusCode: 200, kpis };
