@@ -50,10 +50,22 @@ const LoginPage = () => {
             localStorage.setItem('doctorId', doctorId);
             localStorage.setItem('isUserLogin', 'false'); // Mark as doctor login
             
-            // Store JWT token using auth utility
+            // Store JWT token using auth utility (from response body)
             if (res.data.accessToken) {
               setDoctorToken(res.data.accessToken);
-              console.log('JWT token stored using auth utility');
+              console.log('JWT token stored using auth utility from response body');
+            }
+            
+            // Also check if token was set as cookie by backend
+            const cookieToken = document.cookie
+              .split('; ')
+              .find(row => row.startsWith('jwt_token='))
+              ?.split('=')[1];
+            
+            if (cookieToken) {
+              console.log('JWT token also found in cookie from backend');
+            } else {
+              console.log('No JWT token found in cookie from backend');
             }
             
             console.log('doctorId set:', doctorId); // Debug statement

@@ -34,9 +34,17 @@ axiosInstance.interceptors.request.use(
       // Use doctor JWT token
       const token = getDoctorToken();
       console.log('Doctor JWT token:', token ? 'Present' : 'Missing');
+      
+      // Debug: Check all cookies
+      console.log('All cookies:', document.cookie);
+      
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log('Added doctor JWT to Authorization header');
+      } else {
+        console.log('No doctor JWT token found - checking localStorage');
+        const localStorageToken = localStorage.getItem('jwt_token');
+        console.log('localStorage jwt_token:', localStorageToken ? 'Present' : 'Missing');
       }
     }
     

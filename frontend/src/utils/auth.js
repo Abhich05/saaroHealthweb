@@ -4,8 +4,8 @@ import cookies from 'js-cookie';
 export const setDoctorToken = (token) => {
   cookies.set('jwt_token', token, { 
     expires: 7, 
-    secure: process.env.NODE_ENV === 'production', 
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax' 
+    secure: false, // Allow HTTP in development
+    sameSite: 'lax' // Use lax for better compatibility
   });
 }
 
@@ -21,8 +21,8 @@ export const removeDoctorToken = () => {
 export const setUserToken = (token) => {
   cookies.set('user_jwt_token', token, { 
     expires: 7, 
-    secure: process.env.NODE_ENV === 'production', 
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax' 
+    secure: false, // Allow HTTP in development
+    sameSite: 'lax' // Use lax for better compatibility
   });
 }
 

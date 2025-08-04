@@ -45,8 +45,8 @@ const loginDoctor = async (req, res) => {
     res
       .cookie('jwt_token', doctor.doctor.accessToken, {
         httpOnly: false, // Allow JavaScript access
-        secure: process.env.NODE_ENV === 'production', // Secure in production
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // Proper sameSite
+        secure: false, // Allow HTTP in development
+        sameSite: 'lax', // Use lax for better compatibility
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       })
@@ -233,8 +233,8 @@ const logoutDoctor = async (req, res) => {
     res
       .clearCookie('jwt_token', {
         httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        secure: false, // Allow HTTP in development
+        sameSite: 'lax', // Use lax for better compatibility
         path: '/'
       })
       .status(200)
