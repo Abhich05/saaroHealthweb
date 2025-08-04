@@ -51,6 +51,11 @@ const UserLoginPage = () => {
           
           // Store user JWT token using auth utility
           // The token is already set as a cookie by the backend
+          // Also store it using the auth utility for consistency
+          if (res.data.accessToken) {
+            setUserToken(res.data.accessToken);
+            console.log('User JWT token stored using auth utility');
+          }
           console.log('User login successful, token set by backend');
           
           navigate('/'); // Navigate to dashboard

@@ -27,7 +27,9 @@ const ProtectedRoute = ({ children }) => {
   });
 
   if (!isAuthenticated || !hasValidToken) {
-    return <Navigate to="/login" replace />;
+    // Redirect to appropriate login page based on user type
+    const redirectPath = isUserLogin ? "/user-login" : "/login";
+    return <Navigate to={redirectPath} replace />;
   }
 
   return children;
