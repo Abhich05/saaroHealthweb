@@ -21,6 +21,10 @@ const dropdownLibrarySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    creator: {
+      type: String,
+      default: "System",
+    },
   },
   {
     timestamps: true,

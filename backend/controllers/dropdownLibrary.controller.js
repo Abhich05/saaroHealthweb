@@ -46,6 +46,50 @@ const getAllDropdownsByDoctorId = async (req, res) => {
   }
 }
 
+const getDropdownsBySection = async (req, res) => {
+  try {
+    const { doctorId, sectionId } = req.params;
+    const dropdowns = await dropdownService.getDropdownsBySection(doctorId, sectionId);
+    if (dropdowns?.error) {
+      return res
+        .status(dropdowns.statusCode)
+        .send(dropdowns.error);
+    }
+
+    res
+      .status(dropdowns.statusCode)
+      .json({
+        dropdowns: dropdowns.dropdowns,
+      });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
+const getAllDropdownsGroupedBySection = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const dropdowns = await dropdownService.getAllDropdownsGroupedBySection(doctorId);
+    if (dropdowns?.error) {
+      return res
+        .status(dropdowns.statusCode)
+        .send(dropdowns.error);
+    }
+
+    res
+      .status(dropdowns.statusCode)
+      .json({
+        dropdowns: dropdowns.dropdowns,
+      });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 const updateDropdown = async (req, res) => {
   try {
     const { dropdownId } = req.params;
@@ -95,6 +139,8 @@ const deleteDropdown = async (req, res) => {
 module.exports = {
   addDropdown,
   getAllDropdownsByDoctorId,
+  getDropdownsBySection,
+  getAllDropdownsGroupedBySection,
   updateDropdown,
   deleteDropdown,
 };

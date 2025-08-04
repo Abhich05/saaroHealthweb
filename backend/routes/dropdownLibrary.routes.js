@@ -4,6 +4,8 @@ const dropdownLibrary = express.Router({ mergeParams: true });
 
 dropdownLibrary.post('/', dropdownController.addDropdown);
 dropdownLibrary.get('/', dropdownController.getAllDropdownsByDoctorId);
+dropdownLibrary.get('/grouped', dropdownController.getAllDropdownsGroupedBySection);
+dropdownLibrary.get('/section/:sectionId', dropdownController.getDropdownsBySection);
 dropdownLibrary.put('/:dropdownId', dropdownController.updateDropdown);
 dropdownLibrary.delete('/:dropdownId', dropdownController.deleteDropdown);
 

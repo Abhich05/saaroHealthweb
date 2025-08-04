@@ -6,6 +6,7 @@ const addDropdown = async ( doctorId, dropdownDetails ) => {
       sectionId,
       sectionName,
       name,
+      creator = "System"
     } = dropdownDetails;
 
     if (
@@ -19,19 +20,26 @@ const addDropdown = async ( doctorId, dropdownDetails ) => {
       };
     }
 
-    // const dropdown = await DropdownLibrary.findOne({ name });
-    // if (dropdown) {
-    //   return {
-    //     statusCode: 409,
-    //     error: `Dropdown with name '${name}' already exist`,
-    //   };
-    // }
+    // Check for duplicate entries in the same section
+    const existingDropdown = await DropdownLibrary.findOne({ 
+      doctorId, 
+      sectionId, 
+      name: { $regex: new RegExp(`^${name}$`, 'i') } // Case-insensitive match
+    });
+    
+    if (existingDropdown) {
+      return {
+        statusCode: 409,
+        error: `Dropdown entry '${name}' already exists in this section`,
+      };
+    }
 
     const newDropdown = new DropdownLibrary({
       doctorId,
       sectionId,
       sectionName,
       name,
+      creator
     });
     await newDropdown.save();
 
@@ -42,14 +50,14 @@ const addDropdown = async ( doctorId, dropdownDetails ) => {
   } catch (error) {
     return {
       statusCode: 500,
-      error: error,
+      error: error.message,
     };
   }
 }
 
 const getAllDropdownsByDoctorId = async ( doctorId ) => {
   try {
-    const dropdowns = await DropdownLibrary.find({ doctorId });
+    const dropdowns = await DropdownLibrary.find({ doctorId }).sort({ createdAt: -1 });
 
     return {
       statusCode: 200,
@@ -58,7 +66,59 @@ const getAllDropdownsByDoctorId = async ( doctorId ) => {
   } catch (error) {
     return {
       statusCode: 500,
-      error: error,
+      error: error.message,
+    };
+  }
+}
+
+const getDropdownsBySection = async ( doctorId, sectionId ) => {
+  try {
+    const dropdowns = await DropdownLibrary.find({ 
+      doctorId, 
+      sectionId 
+    }).sort({ name: 1 });
+
+    return {
+      statusCode: 200,
+      dropdowns,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error.message,
+    };
+  }
+}
+
+const getAllDropdownsGroupedBySection = async ( doctorId ) => {
+  try {
+    const dropdowns = await DropdownLibrary.find({ doctorId }).sort({ sectionName: 1, name: 1 });
+    
+    // Group dropdowns by section
+    const groupedDropdowns = dropdowns.reduce((acc, dropdown) => {
+      if (!acc[dropdown.sectionId]) {
+        acc[dropdown.sectionId] = {
+          sectionId: dropdown.sectionId,
+          sectionName: dropdown.sectionName,
+          options: []
+        };
+      }
+      acc[dropdown.sectionId].options.push({
+        id: dropdown._id,
+        name: dropdown.name,
+        creator: dropdown.creator
+      });
+      return acc;
+    }, {});
+
+    return {
+      statusCode: 200,
+      dropdowns: Object.values(groupedDropdowns),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error.message,
     };
   }
 }
@@ -67,6 +127,9 @@ const updateDropdown = async ( dropdownId, dropdownDetails ) => {
   try {
     const {
       name,
+      sectionId,
+      sectionName,
+      creator
     } = dropdownDetails;
 
     if (!name) {
@@ -76,16 +139,35 @@ const updateDropdown = async ( dropdownId, dropdownDetails ) => {
       };
     }
 
+    // Check for duplicate entries in the same section (excluding current entry)
+    const existingDropdown = await DropdownLibrary.findOne({ 
+      _id: { $ne: dropdownId },
+      sectionId, 
+      name: { $regex: new RegExp(`^${name}$`, 'i') } // Case-insensitive match
+    });
+    
+    if (existingDropdown) {
+      return {
+        statusCode: 409,
+        error: `Dropdown entry '${name}' already exists in this section`,
+      };
+    }
+
+    const updateData = { name };
+    if (sectionId) updateData.sectionId = sectionId;
+    if (sectionName) updateData.sectionName = sectionName;
+    if (creator) updateData.creator = creator;
+
     const dropdown = await DropdownLibrary.findByIdAndUpdate(
       dropdownId,
-      { name },
+      updateData,
       { new: true },
     );
 
     if (!dropdown) {
       return {
         statusCode: 404,
-        error: `Dropdown with name '${name}' not found`,
+        error: `Dropdown not found`,
       };
     }
 
@@ -96,7 +178,7 @@ const updateDropdown = async ( dropdownId, dropdownDetails ) => {
   } catch (error) {
     return {
       statusCode: 500,
-      error: error,
+      error: error.message,
     };
   }
 }
@@ -118,7 +200,7 @@ const deleteDropdown = async ( dropdownId ) => {
   } catch (error) {
     return {
       statusCode: 500, 
-      error: error,
+      error: error.message,
     };
   }
 }
@@ -126,6 +208,8 @@ const deleteDropdown = async ( dropdownId ) => {
 module.exports = {
   addDropdown,
   getAllDropdownsByDoctorId,
+  getDropdownsBySection,
+  getAllDropdownsGroupedBySection,
   updateDropdown,
   deleteDropdown,
 };

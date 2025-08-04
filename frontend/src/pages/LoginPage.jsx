@@ -11,6 +11,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     let newErrors = {};
@@ -30,6 +31,7 @@ const LoginPage = () => {
     }
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
+      setIsLoading(true); // Start loading immediately
       try {
         // Clear any stale data before login
         localStorage.removeItem('doctorName');
@@ -76,6 +78,8 @@ const LoginPage = () => {
         }
       } catch (err) {
         setSubmitError(err.response?.data?.error || "Login failed. Please try again.");
+      } finally {
+        setIsLoading(false); // Stop loading regardless of success or error
       }
     }
   };
@@ -142,10 +146,18 @@ const LoginPage = () => {
             </p>
 
             <Button
-              className="w-full text-white rounded-full py-2 text-sm hover:bg-purple-700 transition"
+              className="w-full text-white rounded-full py-2 text-sm hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleLogin}
+              disabled={isLoading}
             >
-              Log In
+              {isLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Logging In...
+                </div>
+              ) : (
+                "Log In"
+              )}
             </Button>
 
             {submitError && (
