@@ -14,6 +14,7 @@ const PublicBookingPage = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     fullName: "",
     phoneNumber: "",
@@ -37,6 +38,8 @@ const PublicBookingPage = () => {
     } catch (error) {
       console.error('Error fetching doctor info:', error);
       setError("Unable to load doctor information");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -215,6 +218,91 @@ const PublicBookingPage = () => {
       setLoading(false);
     }
   };
+
+  // Skeleton Loader Component
+  const SkeletonLoader = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        {/* Header Skeleton */}
+        <div className="text-center mb-8">
+          <div className="h-8 bg-gray-200 rounded w-96 mx-auto mb-2 animate-pulse"></div>
+          <div className="h-4 bg-gray-200 rounded w-48 mx-auto animate-pulse"></div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Form Skeleton */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="h-6 bg-gray-200 rounded w-32 mb-4 animate-pulse"></div>
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i}>
+                  <div className="h-4 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
+                  <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+
+          {/* Calendar Skeleton */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="h-6 bg-gray-200 rounded w-24 mb-4 animate-pulse"></div>
+            
+            {/* Calendar Header Skeleton */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-5 bg-gray-200 rounded w-32 animate-pulse"></div>
+              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+
+            {/* Calendar Grid Skeleton */}
+            <div className="grid grid-cols-7 gap-1 mb-4">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="h-6 bg-gray-200 rounded animate-pulse"></div>
+              ))}
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="h-12 bg-gray-200 rounded animate-pulse"></div>
+              ))}
+            </div>
+
+            {/* Legend Skeleton */}
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-gray-200 rounded mr-2 animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded w-16 animate-pulse"></div>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-gray-200 rounded mr-2 animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded w-12 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Time Slots Skeleton */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="h-6 bg-gray-200 rounded w-24 mb-4 animate-pulse"></div>
+            <div className="text-center py-8">
+              <div className="h-4 bg-gray-200 rounded w-48 mx-auto animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Doctor Info Skeleton */}
+        <div className="mt-8 bg-white rounded-lg shadow-md p-6">
+          <div className="h-6 bg-gray-200 rounded w-48 mb-4 animate-pulse"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return <SkeletonLoader />;
+  }
 
   if (!doctorInfo) {
     return (

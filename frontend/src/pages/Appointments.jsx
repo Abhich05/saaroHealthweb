@@ -504,12 +504,9 @@ const AppointmentsDashboard = () => {
                           className="flex justify-between items-center hover:bg-gray-100 p-2 rounded"
                         >
                           <div className="flex items-center gap-3">
-                            <img
-                              src={`/${apt.name}.png`}
-                              onError={(e) => (e.currentTarget.src = "/Sophia Carter.png")}
-                              alt="avatar"
-                              className="rounded-full w-10 h-10"
-                            />
+                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse flex items-center justify-center">
+                              <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
+                            </div>
                             <div>
                               <p className="font-medium">{apt.name}</p>
                               <p className="text-sm text-gray-500">{apt.time}</p>
@@ -564,27 +561,29 @@ const AppointmentsDashboard = () => {
 
                 <div>
                   <h2 className="text-lg font-semibold mb-2">Share Booking Link</h2>
-                  <img
-                    src={qrCodeUrl || "qr.png"}
-                    alt="QR Code"
-                    className="rounded-xl w-[328px] h-[276px]"
-                    onError={(e) => {
-                      e.currentTarget.src = "qr.png";
-                      if (!qrCodeUrl) {
-                        generateBookingLink();
-                      }
-                    }}
-                  />
+                  {qrCodeUrl ? (
+                    <img
+                      src={qrCodeUrl}
+                      alt="QR Code"
+                      className="rounded-xl w-[328px] h-[276px]"
+                    />
+                  ) : (
+                    <div className="rounded-xl w-[328px] h-[276px] bg-gray-200 animate-pulse flex items-center justify-center">
+                      <div className="text-gray-500 text-sm">Generating QR Code...</div>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center mt-3">
                     <Button 
                       className="text-700 text-sm text-[#120F1A] px-3 py-1 rounded-full"
                       onClick={handleCopyLink}
+                      disabled={!qrCodeUrl}
                     >
                       Copy Link
                     </Button>
                     <Button 
                       className="text-700 text-[#120F1A] text-sm px-3 py-1 rounded-full"
                       onClick={handleShareWhatsApp}
+                      disabled={!qrCodeUrl}
                     >
                       Share on WhatsApp
                     </Button>
