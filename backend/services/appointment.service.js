@@ -169,6 +169,9 @@ const createAppointment = async ( appointmentData, doctorId ) => {
       time,
       type,
       phoneNumber,
+      source = 'manual',
+      reason,
+      email,
     } = appointmentData;
 
     const appointmentDataValidation = validateAppointment(appointmentData);
@@ -218,6 +221,9 @@ const createAppointment = async ( appointmentData, doctorId ) => {
       location,
       time,
       type,
+      source,
+      reason,
+      email,
     });
     await newAppointment.save();
 
@@ -709,6 +715,41 @@ const getAppointmentTimeSlots = async (doctorId, locationId, date) => {
   }
 };
 
+const getSharedBookings = async (doctorId) => {
+  try {
+    const appointments = await Appointment.find({
+      doctorId,
+      source: { $in: ['public_booking', 'qr_code', 'whatsapp'] }
+    })
+    .populate('patientId', 'fullName phoneNumber')
+    .sort({ createdAt: -1 })
+    .limit(20);
+
+    const formattedAppointments = appointments.map(appointment => ({
+      id: appointment._id,
+      name: appointment.patientId?.fullName || appointment.name || 'Unknown',
+      phoneNumber: appointment.patientId?.phoneNumber || appointment.phoneNumber || 'Unknown',
+      date: appointment.date,
+      time: appointment.time,
+      source: appointment.source,
+      reason: appointment.reason,
+      email: appointment.email,
+      status: appointment.status,
+      createdAt: appointment.createdAt
+    }));
+
+    return {
+      statusCode: 200,
+      appointments: formattedAppointments,
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   checkPatientAndGenerateOTP,
   validateOTP,
@@ -722,4 +763,5 @@ module.exports = {
   getAppointmentLocations,
   getAppointmentDates,
   getAppointmentTimeSlots,
+  getSharedBookings,
 };

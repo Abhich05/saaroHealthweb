@@ -38,6 +38,17 @@ const appointmentSchema = new mongoose.Schema(
       type: String,
       default: 'Pending',
     },
+    source: {
+      type: String,
+      enum: ['manual', 'public_booking', 'qr_code', 'whatsapp'],
+      default: 'manual',
+    },
+    reason: {
+      type: String,
+    },
+    email: {
+      type: String,
+    },
   },
   {
     timestamps: true,

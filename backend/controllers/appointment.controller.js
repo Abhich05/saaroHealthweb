@@ -257,6 +257,27 @@ const getAppointmentTimeSlots = async (req, res) => {
   }
 }
 
+const getSharedBookings = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    const appointments = await appointmentService.getSharedBookings(doctorId);
+    if (appointments?.error) {
+      return res
+        .status(appointments.statusCode)
+        .send(appointments.error);
+    }
+
+    res
+      .status(appointments.statusCode)
+      .json({ appointments: appointments.appointments });
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 module.exports = {
   checkPatientAndGenerateOTP,
   validateOTP,
@@ -270,4 +291,5 @@ module.exports = {
   getAppointmentLocations,
   getAppointmentDates,
   getAppointmentTimeSlots,
+  getSharedBookings,
 };

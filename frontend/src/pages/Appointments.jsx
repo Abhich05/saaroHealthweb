@@ -37,24 +37,32 @@ const AppointmentsDashboard = () => {
     date: "2025-07-05",
     time: "8:00 AM",
   });
+  
+  // New state for booking link features
+  const [bookingLink, setBookingLink] = useState("");
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [patientStats, setPatientStats] = useState({
+    totalPatients: 0,
+    patientTypes: {}
+  });
 
   const doctorId = useContext(DoctorIdContext);
 
   // --- FIX: Define stats for StatBox2 ---
-  const stats = [
+  const [stats, setStats] = useState([
     {
       label: "Total Appointments",
-      value: appointments.length,
+      value: 0,
     },
     {
       label: "Upcoming",
-      value: 0, // Replace with real logic if available
+      value: 0,
     },
     {
       label: "Completed",
-      value: 0, // Replace with real logic if available
+      value: 0,
     },
-  ];
+  ]);
 
   // Helper to map appointment data for display
   const mapAppointmentToDisplay = (apt) => {
@@ -319,6 +327,138 @@ const AppointmentsDashboard = () => {
   // Calculate tomorrow's date in YYYY-MM-DD format
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
+  // Generate booking link and QR code
+  const generateBookingLink = () => {
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/book-appointment/${doctorId}`;
+    setBookingLink(link);
+    
+    // Generate QR code using a QR code service
+    const qrCodeServiceUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`;
+    setQrCodeUrl(qrCodeServiceUrl);
+  };
+
+  // Copy booking link to clipboard
+  const handleCopyLink = async () => {
+    if (!bookingLink) {
+      generateBookingLink();
+    }
+    
+    try {
+      await navigator.clipboard.writeText(bookingLink || `${window.location.origin}/book-appointment/${doctorId}`);
+      window.showToast('Booking link copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      window.showToast('Failed to copy link', 'error', 3000);
+    }
+  };
+
+  // Share on WhatsApp
+  const handleShareWhatsApp = () => {
+    if (!bookingLink) {
+      generateBookingLink();
+    }
+    
+    const message = `Book your appointment with Dr. ${localStorage.getItem('doctorName') || 'our doctor'}: ${bookingLink || `${window.location.origin}/book-appointment/${doctorId}`}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Fetch patient statistics
+  const fetchPatientStats = async () => {
+    if (!doctorId) return;
+    
+    try {
+      const response = await axiosInstance.get(`/dashboard/${doctorId}/kpis`);
+      if (response.data && response.data.kpis) {
+        const totalPatientsKPI = response.data.kpis.find(kpi => kpi.label === 'Total Patients');
+        if (totalPatientsKPI) {
+          setPatientStats(prev => ({
+            ...prev,
+            totalPatients: totalPatientsKPI.value || 0
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch patient stats:', error);
+      // Fallback: try to get from patients endpoint
+      try {
+        const patientsResponse = await axiosInstance.get(`/patient/${doctorId}?page=1&limit=1`);
+        if (patientsResponse.data && patientsResponse.data.pagination) {
+          setPatientStats(prev => ({
+            ...prev,
+            totalPatients: patientsResponse.data.pagination.totalPatients || 0
+          }));
+        }
+      } catch (fallbackError) {
+        console.error('Failed to fetch patient stats fallback:', fallbackError);
+      }
+    }
+  };
+
+  // Calculate appointment statistics
+  const calculateAppointmentStats = () => {
+    const upcoming = appointments.filter(apt => {
+      const aptDate = new Date(apt.date);
+      const today = new Date();
+      return aptDate >= today;
+    }).length;
+    
+    const completed = appointments.filter(apt => {
+      const aptDate = new Date(apt.date);
+      const today = new Date();
+      return aptDate < today;
+    }).length;
+    
+    return { upcoming, completed };
+  };
+
+  // Update stats when appointments change
+  useEffect(() => {
+    const { upcoming, completed } = calculateAppointmentStats();
+    setStats([
+      {
+        label: "Total Appointments",
+        value: appointments.length,
+      },
+      {
+        label: "Upcoming",
+        value: upcoming,
+      },
+      {
+        label: "Completed",
+        value: completed,
+      },
+    ]);
+  }, [appointments]);
+
+  // Fetch patient stats on component mount
+  useEffect(() => {
+    fetchPatientStats();
+  }, [doctorId]);
+
+  // Fetch appointments booked through shared link
+  const [sharedBookings, setSharedBookings] = useState([]);
+  const [sharedBookingsLoading, setSharedBookingsLoading] = useState(false);
+
+  const fetchSharedBookings = async () => {
+    if (!doctorId) return;
+    setSharedBookingsLoading(true);
+    try {
+      const response = await axiosInstance.get(`/appointment/${doctorId}/shared-bookings`);
+      setSharedBookings(response.data.appointments || []);
+    } catch (error) {
+      console.error('Failed to fetch shared bookings:', error);
+      setSharedBookings([]);
+    } finally {
+      setSharedBookingsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSharedBookings();
+  }, [doctorId]);
+
   // Remove full page loading
   if (error) return (
     <div className="flex h-screen items-center justify-center">
@@ -425,25 +565,67 @@ const AppointmentsDashboard = () => {
                 <div>
                   <h2 className="text-lg font-semibold mb-2">Share Booking Link</h2>
                   <img
-                    src="qr.png"
+                    src={qrCodeUrl || "qr.png"}
                     alt="QR Code"
                     className="rounded-xl w-[328px] h-[276px]"
+                    onError={(e) => {
+                      e.currentTarget.src = "qr.png";
+                      if (!qrCodeUrl) {
+                        generateBookingLink();
+                      }
+                    }}
                   />
-                  <div className="flex justify-between items-center  mt-3">
-                    <Button className="text-700 text-sm text-[#120F1A] px-3 py-1 rounded-full">
+                  <div className="flex justify-between items-center mt-3">
+                    <Button 
+                      className="text-700 text-sm text-[#120F1A] px-3 py-1 rounded-full"
+                      onClick={handleCopyLink}
+                    >
                       Copy Link
                     </Button>
-                    <Button className="text-700 text-[#120F1A] text-sm px-3 py-1 rounded-full">
+                    <Button 
+                      className="text-700 text-[#120F1A] text-sm px-3 py-1 rounded-full"
+                      onClick={handleShareWhatsApp}
+                    >
                       Share on WhatsApp
                     </Button>
                   </div>
                 </div>
 
-                <div>
-                  <h2 className="text-md font-semibold mb-1">Patients by Type</h2>
-                  <p className="text-sm text-gray-700">Patient Types</p>
-                  <p className="text-2xl font-bold">480 Total Patients</p>
-                </div>
+                                 <div>
+                   <h2 className="text-md font-semibold mb-1">Patients by Type</h2>
+                   <p className="text-sm text-gray-700">Patient Types</p>
+                   <p className="text-2xl font-bold">{patientStats.totalPatients} Total Patients</p>
+                 </div>
+
+                 {/* Shared Bookings Section */}
+                 <div>
+                   <h2 className="text-lg font-semibold mb-2">Bookings via Shared Link</h2>
+                   <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                     {sharedBookingsLoading ? (
+                       <div className="text-center text-gray-500">Loading...</div>
+                     ) : sharedBookings.length > 0 ? (
+                       sharedBookings.slice(0, 5).map((booking, index) => (
+                         <div key={index} className="flex justify-between items-center p-2 bg-white rounded">
+                           <div>
+                             <p className="font-medium text-sm">{booking.name}</p>
+                             <p className="text-xs text-gray-500">{booking.date} at {booking.time}</p>
+                             <p className="text-xs text-purple-600">{booking.source}</p>
+                           </div>
+                           <div className="text-xs text-gray-400">
+                             {booking.reason ? booking.reason.substring(0, 20) + '...' : 'No reason'}
+                           </div>
+                         </div>
+                       ))
+                     ) : (
+                       <div className="text-center text-gray-500 text-sm">No bookings via shared link yet</div>
+                     )}
+                     {sharedBookings.length > 5 && (
+                       <div className="text-center text-purple-600 text-sm cursor-pointer">
+                         View all {sharedBookings.length} shared bookings
+                       </div>
+                     )}
+                   </div>
+                 </div>
               </div>
             </div>
           </div>

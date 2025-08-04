@@ -23,6 +23,7 @@ import ConsultationForm from "./pages/Consult"
 import DischargeSummaryForm from "./pages/Discharge"
 import Messages from "./pages/Messages"
 import AppointmentsDashboard from "./pages/Appointments"
+import PublicBookingPage from "./pages/PublicBookingPage"
 import NotFoundPage from "./pages/PageNotFound"
 import Socials from "./pages/Socials";
 import Automation from "./pages/Automation"
@@ -242,6 +243,7 @@ function App() {
             <Route path="/step3" element={<StepThreePage />} />
             <Route path="/step4" element={<StepFourPage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
+            <Route path="/book-appointment/:doctorId" element={<PublicBookingPage />} />
 
             {/* Protected routes with role-based access */}
             <Route path="/" element={<ProtectedRoute><RoleProtectedRoute requiredPermission="dashboard"><Dashboard /></RoleProtectedRoute></ProtectedRoute>} />

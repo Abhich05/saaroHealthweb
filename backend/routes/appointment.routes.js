@@ -63,4 +63,9 @@ appointment.get(
   appointmentController.getAppointmentTimeSlots,
 );
 
+appointment.get(
+  '/:doctorId/shared-bookings',
+  appointmentController.getSharedBookings,
+);
+
 module.exports = appointment;
