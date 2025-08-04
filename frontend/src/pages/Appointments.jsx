@@ -437,6 +437,13 @@ const AppointmentsDashboard = () => {
     fetchPatientStats();
   }, [doctorId]);
 
+  // Generate QR code immediately when component mounts
+  useEffect(() => {
+    if (doctorId) {
+      generateBookingLink();
+    }
+  }, [doctorId]);
+
   // Fetch appointments booked through shared link
   const [sharedBookings, setSharedBookings] = useState([]);
   const [sharedBookingsLoading, setSharedBookingsLoading] = useState(false);
