@@ -1,5 +1,5 @@
 import axios from 'axios';
-import cookies from 'js-cookie';
+import { getDoctorToken, getUserToken, clearAllAuth } from '../utils/auth';
 
 // axiosInstance is configured to use the backend API base URL from .env
 // Make sure VITE_API_BASE_URL is set correctly in your .env file
@@ -7,8 +7,7 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.o
 
 const axiosInstance = axios.create({
   baseURL: baseURL,
-  withCredentials: true, // IF you plan to use cookies in some cases
-  // Do not set Content-Type globally; let axios handle it per request
+  withCredentials: true, // Enable cookies for cross-origin requests
 });
 
 // Add JWT to requests automatically
@@ -25,21 +24,16 @@ axiosInstance.interceptors.request.use(
     
     if (isUserLogin) {
       // Use user JWT token
-      const token = cookies.get('user_jwt_token');
+      const token = getUserToken();
       console.log('User JWT token:', token ? 'Present' : 'Missing');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log('Added user JWT to Authorization header');
       }
     } else {
-      // Use doctor JWT token - prioritize localStorage over cookies
-      const localStorageToken = localStorage.getItem('jwt_token');
-      const cookieToken = cookies.get('jwt_token');
-      
-      console.log('Doctor JWT from localStorage:', localStorageToken ? 'Present' : 'Missing');
-      console.log('Doctor JWT from cookie:', cookieToken ? 'Present' : 'Missing');
-      
-      const token = localStorageToken || cookieToken;
+      // Use doctor JWT token
+      const token = getDoctorToken();
+      console.log('Doctor JWT token:', token ? 'Present' : 'Missing');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log('Added doctor JWT to Authorization header');
@@ -57,32 +51,27 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Only redirect to login if it's a token authentication issue
-      // Don't redirect for permission-based 401 errors
-      const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+      console.log('=== 401 UNAUTHORIZED ERROR ===');
+      console.log('Error response:', error.response.data);
       
-      // Check if this is a token issue or permission issue
-      if (error.response.data && error.response.data.error && 
-          (error.response.data.error.includes('token') || 
-           error.response.data.error.includes('unauthorized') ||
-           error.response.data.error.includes('Access token required'))) {
+      // Check if this is a token authentication issue
+      const errorMessage = error.response.data?.error || '';
+      const isTokenError = errorMessage.includes('token') || 
+                          errorMessage.includes('unauthorized') ||
+                          errorMessage.includes('Access token required') ||
+                          errorMessage.includes('Token expired');
+      
+      if (isTokenError) {
+        console.log('Token authentication error detected, clearing auth data');
         
-        // Clear tokens on unauthorized access
-        cookies.remove('jwt_token');
-        cookies.remove('user_jwt_token');
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user_jwt_token');
-        localStorage.removeItem('doctorId');
-        localStorage.removeItem('isUserLogin');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('userPermissions');
-        localStorage.removeItem('doctorName');
-        localStorage.removeItem('clinicName');
+        // Clear all authentication data
+        clearAllAuth();
         
         // Redirect to appropriate login page
+        const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
         const redirectPath = isUserLogin ? '/user-login' : '/login';
+        
+        console.log('Redirecting to:', redirectPath);
         window.location.href = redirectPath;
       }
     }

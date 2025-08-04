@@ -35,6 +35,7 @@ import axiosInstance from '../api/axiosInstance';
 import ConsultSkeletonLoader from '../components/ui/ConsultSkeletonLoader';
 import { toast } from 'react-toastify';
 import { DoctorIdContext } from '../App';
+import { getDoctorToken } from '../utils/auth';
 
 const DEFAULT_SECTION_ORDER = [
   'complaints',
@@ -644,8 +645,8 @@ const ConsultationForm = () => {
   if (error) return <div className="flex h-screen items-center justify-center text-red-600">{error}</div>;
 
   const handleSaveAndFinalize = async () => {
-    const jwtToken = document.cookie.split('; ').find(row => row.startsWith('jwt_token='))?.split('=')[1];
-    console.log('DEBUG: doctorId:', doctorId, 'patient:', patient, 'jwt_token:', jwtToken);
+    const jwtToken = getDoctorToken();
+    console.log('DEBUG: doctorId:', doctorId, 'patient:', patient, 'jwt_token:', jwtToken ? 'Present' : 'Missing');
     if (!doctorId || !patient?._id) {
       toast.error('Doctor or patient not found. doctorId: ' + doctorId + ', patient: ' + JSON.stringify(patient));
       return;

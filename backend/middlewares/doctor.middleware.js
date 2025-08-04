@@ -20,29 +20,29 @@ const doctorMiddleware = async (req, res, next) => {
       console.log('Token from cookie:', accessToken ? 'Present' : 'Missing');
     } else {
       console.log('No token found in headers or cookies');
-    }
-    
-    const { doctorId } = req.params;
-    console.log('Doctor ID from params:', doctorId);
-
-    const doctor = await Doctor.findById(doctorId);
-    if (!doctor) {
-      return res
-        .status(404)
-        .json({ error: 'Doctor not found' });
+      return res.status(401).json({ error: 'Access token required' });
     }
 
+    // Verify the token and get doctor details
     const doctorDetails = await verifyAccessToken(accessToken);
     if (doctorDetails?.error) {
+      console.log('Token verification failed:', doctorDetails.error);
       return res
         .status(403)
         .json({ error: doctorDetails.error });
     }
 
-    if (doctorDetails.data._id != doctorId) {
+    // Get doctor ID from token payload
+    const doctorId = doctorDetails.data._id;
+    console.log('Doctor ID from token:', doctorId);
+
+    // Verify doctor exists
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) {
+      console.log('Doctor not found for ID:', doctorId);
       return res
-        .status(401)
-        .json({ error: 'Unauthorized access' });
+        .status(404)
+        .json({ error: 'Doctor not found' });
     }
 
     // Set doctor info in request object
@@ -52,11 +52,13 @@ const doctorMiddleware = async (req, res, next) => {
       name: doctor.name
     };
 
+    console.log('Doctor middleware successful for:', doctor.name);
     next();
   } catch (err) {
+    console.error('Doctor middleware error:', err);
     res
       .status(500)
-      .json({ error: err });
+      .json({ error: err.message });
   }
 }
 

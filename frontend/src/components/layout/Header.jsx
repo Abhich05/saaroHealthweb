@@ -1,44 +1,29 @@
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { CgProfile } from "react-icons/cg";
 import { IoMdNotifications } from "react-icons/io";
-import { useContext, useState, useRef, useEffect } from "react";
-import { DoctorNameContext, UserContext } from "../../App";
-import axiosInstance from '../../api/axiosInstance';
+import { CgProfile } from "react-icons/cg";
+import axiosInstance from "../../api/axiosInstance";
+import { clearAllAuth } from "../../utils/auth";
 
 const Header = () => {
   const navigate = useNavigate();
-  const doctorName = useContext(DoctorNameContext);
-  const user = useContext(UserContext);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [profilePicture, setProfilePicture] = useState(null);
   const dropdownRef = useRef(null);
 
   const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
-  const currentUserName = isUserLogin ? localStorage.getItem('userName') : doctorName;
-  const currentUserRole = isUserLogin ? localStorage.getItem('userRole') : 'Doctor';
+  const currentUserName = localStorage.getItem('userName') || localStorage.getItem('doctorName') || 'User';
+  const currentUserRole = localStorage.getItem('userRole') || 'Doctor';
 
-  // Fetch profile picture
   useEffect(() => {
     const fetchProfilePicture = async () => {
       try {
-        const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
         const doctorId = localStorage.getItem('doctorId');
-        
-        let endpoint;
-        if (isUserLogin) {
-          endpoint = '/user/me';
-        } else {
-          endpoint = `/doctor/${doctorId}/profile`;
-        }
-        
-        const response = await axiosInstance.get(endpoint);
-        const profileData = response.data.doctor || response.data.user;
-        
-        console.log('Header - Profile data received:', profileData);
-        console.log('Header - Avatar URL:', profileData.avatar);
-        
-        if (profileData.avatar) {
-          setProfilePicture(profileData.avatar);
+        if (!doctorId) return;
+
+        const res = await axiosInstance.get(`/doctor/${doctorId}`);
+        if (res.data && res.data.doctor && res.data.doctor.avatar) {
+          setProfilePicture(res.data.doctor.avatar);
         }
       } catch (error) {
         console.error('Error fetching profile picture:', error);
@@ -53,14 +38,14 @@ const Header = () => {
       if (isUserLogin) {
         await axiosInstance.post('/user/logout');
       } else {
-        await axiosInstance.post('/logout');
+        await axiosInstance.post('/doctor/logout');
       }
     } catch (e) {
       console.error('Logout error:', e);
     }
     
-    // Clear all stored data
-    localStorage.clear();
+    // Clear all stored data using auth utility
+    clearAllAuth();
     navigate("/login", { replace: true });
   };
 

@@ -41,12 +41,12 @@ const loginDoctor = async (req, res) => {
     console.log('Access token:', doctor.doctor.accessToken ? 'Present' : 'Missing');
     console.log('Doctor ID:', doctor.doctor.id);
 
-    // Set JWT as cookie (not httpOnly so frontend can access it)
+    // Set JWT as cookie with proper security settings
     res
       .cookie('jwt_token', doctor.doctor.accessToken, {
         httpOnly: false, // Allow JavaScript access
-        secure: false, // Allow HTTP in development
-        sameSite: 'none', // Allow cross-origin
+        secure: process.env.NODE_ENV === 'production', // Secure in production
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // Proper sameSite
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       })
@@ -225,9 +225,32 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const logoutDoctor = async (req, res) => {
+  try {
+    console.log('=== DOCTOR LOGOUT DEBUG ===');
+    console.log('Logging out doctor');
+    
+    res
+      .clearCookie('jwt_token', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        path: '/'
+      })
+      .status(200)
+      .json({ message: 'Logged out successfully' });
+      
+    console.log('Doctor logout successful');
+  } catch (error) {
+    console.error('Doctor logout error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   registerDoctor,
   loginDoctor,
+  logoutDoctor,
   getDoctor,
   deleteDoctor,
   getFirstDoctor,

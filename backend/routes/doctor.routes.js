@@ -15,6 +15,12 @@ doctor.post(
   doctorController.loginDoctor,
 );
 
+// Add doctor logout route
+doctor.post(
+  '/logout',
+  doctorController.logoutDoctor,
+);
+
 doctor.get('/first', doctorController.getFirstDoctor);
 
 // Route for getting doctor info (used by frontend)

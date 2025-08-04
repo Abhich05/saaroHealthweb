@@ -16,6 +16,7 @@ const RoleProtectedRoute = ({ children, requiredPermission }) => {
       setIsUserLogin(isUser);
 
       if (!doctorId) {
+        console.log('RoleProtectedRoute - No doctor ID found');
         setHasPermission(false);
         setIsLoading(false);
         return;
@@ -33,16 +34,23 @@ const RoleProtectedRoute = ({ children, requiredPermission }) => {
           
           console.log('RoleProtectedRoute - Has required permission:', hasRequiredPermission);
           
-          // If no permissions are set (empty object), give basic access to dashboard
-          if (Object.keys(permissions).length === 0 && requiredPermission === 'dashboard') {
-            console.log('RoleProtectedRoute - No permissions set, allowing dashboard access');
+          // If permissions object is empty or has no meaningful permissions, 
+          // only allow dashboard access
+          const hasAnyPermissions = Object.keys(permissions).length > 0 && 
+            Object.values(permissions).some(perm => perm !== 'none');
+          
+          if (!hasAnyPermissions && requiredPermission === 'dashboard') {
+            console.log('RoleProtectedRoute - No meaningful permissions, allowing dashboard access');
             setHasPermission(true);
+          } else if (!hasAnyPermissions) {
+            console.log('RoleProtectedRoute - No meaningful permissions, denying access');
+            setHasPermission(false);
           } else {
             setHasPermission(hasRequiredPermission);
           }
         } catch (error) {
           console.error('Error parsing permissions:', error);
-          // If there's an error parsing permissions, allow dashboard access
+          // If there's an error parsing permissions, only allow dashboard access
           if (requiredPermission === 'dashboard') {
             console.log('RoleProtectedRoute - Error parsing permissions, allowing dashboard access');
             setHasPermission(true);
@@ -50,8 +58,13 @@ const RoleProtectedRoute = ({ children, requiredPermission }) => {
             setHasPermission(false);
           }
         }
+      } else if (isUser && !userPermissions) {
+        // User login but no permissions set - only allow dashboard
+        console.log('RoleProtectedRoute - User login but no permissions set');
+        setHasPermission(requiredPermission === 'dashboard');
       } else {
         // Doctor login - has full access
+        console.log('RoleProtectedRoute - Doctor login, full access granted');
         setHasPermission(true);
       }
 

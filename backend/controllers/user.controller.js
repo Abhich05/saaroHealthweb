@@ -216,8 +216,8 @@ const loginUser = async (req, res) => {
     res
       .cookie('user_jwt_token', accessToken, {
         httpOnly: false, // Allow JavaScript access
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production', // Secure in production
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // Proper sameSite
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       })
@@ -244,16 +244,22 @@ const loginUser = async (req, res) => {
 
 const logoutUser = async (req, res) => {
   try {
+    console.log('=== USER LOGOUT DEBUG ===');
+    console.log('Logging out user');
+    
     res
       .clearCookie('user_jwt_token', {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
         path: '/'
       })
       .status(200)
       .json({ message: 'Logged out successfully' });
+      
+    console.log('User logout successful');
   } catch (error) {
+    console.error('User logout error:', error);
     res.status(500).json({ error: error.message });
   }
 };

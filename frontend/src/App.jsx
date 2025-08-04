@@ -42,6 +42,7 @@ import PhoneLogin from "./pages/PhoneLogin"
 import PasswordResetSuccess from "./pages/PasswordResetSuccess";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 import axiosInstance from './api/axiosInstance';
+import { clearAllAuth } from "./utils/auth";
 
 export const DoctorIdContext = createContext(null);
 export const DoctorNameContext = createContext(null);
@@ -116,9 +117,7 @@ function App() {
           console.error('Error fetching doctor data:', error);
           setDoctorName('');
           // Clear invalid doctor data
-          localStorage.removeItem('doctorId');
-          localStorage.removeItem('doctorName');
-          localStorage.removeItem('jwt_token');
+          clearAllAuth();
         }
       }
       
@@ -196,9 +195,7 @@ function App() {
               } catch (error) {
                 console.error('Error fetching doctor data:', error);
                 setDoctorName('');
-                localStorage.removeItem('doctorId');
-                localStorage.removeItem('doctorName');
-                localStorage.removeItem('jwt_token');
+                clearAllAuth();
               }
             }
           }

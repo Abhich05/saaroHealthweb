@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header2 from "../components/layout/Header2";
 import Button from "../components/ui/Button";
 import axiosInstance from "../api/axiosInstance";
-
+import { setDoctorToken } from "../utils/auth";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -50,21 +50,10 @@ const LoginPage = () => {
             localStorage.setItem('doctorId', doctorId);
             localStorage.setItem('isUserLogin', 'false'); // Mark as doctor login
             
-            // Store JWT token from response body
+            // Store JWT token using auth utility
             if (res.data.accessToken) {
-              localStorage.setItem('jwt_token', res.data.accessToken);
-              console.log('JWT token stored in localStorage from response');
-            }
-            
-            // Also try to get from cookie as backup
-            const jwtToken = document.cookie
-              .split('; ')
-              .find(row => row.startsWith('jwt_token='))
-              ?.split('=')[1];
-            
-            if (jwtToken && !res.data.accessToken) {
-              localStorage.setItem('jwt_token', jwtToken);
-              console.log('JWT token stored in localStorage from cookie');
+              setDoctorToken(res.data.accessToken);
+              console.log('JWT token stored using auth utility');
             }
             
             console.log('doctorId set:', doctorId); // Debug statement

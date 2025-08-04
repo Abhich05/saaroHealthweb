@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header2 from "../components/layout/Header2";
 import Button from "../components/ui/Button";
 import axiosInstance from "../api/axiosInstance";
+import { setUserToken } from "../utils/auth";
 
 const UserLoginPage = () => {
   const navigate = useNavigate();
@@ -45,6 +46,10 @@ const UserLoginPage = () => {
           localStorage.setItem('doctorName', res.data.user.doctorName);
           localStorage.setItem('clinicName', res.data.user.clinicName);
           localStorage.setItem('isUserLogin', 'true');
+          
+          // Store user JWT token using auth utility
+          // The token is already set as a cookie by the backend
+          console.log('User login successful, token set by backend');
           
           navigate('/'); // Navigate to dashboard
         }
