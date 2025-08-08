@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import aiService from "../api/aiService";
 import { toast } from "react-hot-toast";
+import { DoctorIdContext, DoctorNameContext, UserContext } from "../App";
 
 const AiAssistant = () => {
   const [messages, setMessages] = useState([
@@ -17,7 +18,13 @@ const AiAssistant = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [doctorId, setDoctorId] = useState(null);
+  const [doctorName, setDoctorName] = useState("");
   const messagesEndRef = useRef(null);
+
+  // Get context values
+  const contextDoctorId = useContext(DoctorIdContext);
+  const contextDoctorName = useContext(DoctorNameContext);
+  const user = useContext(UserContext);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -28,20 +35,52 @@ const AiAssistant = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Get doctor ID from localStorage or context
-    const storedDoctorId = localStorage.getItem('doctorId');
-    if (storedDoctorId) {
-      setDoctorId(storedDoctorId);
+    // Get doctor ID from context or localStorage
+    let currentDoctorId = null;
+    let currentDoctorName = "";
+
+    // Check if it's a user login or doctor login
+    const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+    
+    if (isUserLogin && user) {
+      // User login - get doctorId from user context
+      currentDoctorId = user.doctorId;
+      currentDoctorName = user.doctorName || "";
+    } else {
+      // Doctor login - get from context or localStorage
+      currentDoctorId = contextDoctorId || localStorage.getItem('doctorId');
+      currentDoctorName = contextDoctorName || localStorage.getItem('doctorName') || "";
     }
-  }, []);
+
+    console.log('AI Assistant - Authentication Debug:', {
+      isUserLogin,
+      contextDoctorId,
+      localStorageDoctorId: localStorage.getItem('doctorId'),
+      userDoctorId: user?.doctorId,
+      currentDoctorId,
+      currentDoctorName
+    });
+
+    if (currentDoctorId) {
+      setDoctorId(currentDoctorId);
+      setDoctorName(currentDoctorName);
+    } else {
+      console.log('No doctor ID found - user may not be authenticated');
+    }
+  }, [contextDoctorId, contextDoctorName, user]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !doctorId) return;
+    if (!input.trim() || isLoading || !doctorId) {
+      if (!doctorId) {
+        toast.error('Please log in to use the AI assistant');
+      }
+      return;
+    }
 
     const userMessage = {
       from: "doctor",
-      name: "Dr. Ethan Carter",
-      avatar: "/profile2.png",
+      name: doctorName || "Doctor",
+      avatar: doctorName ? "/profile2.png" : "/default-avatar.png",
       text: input,
       timestamp: new Date().toISOString()
     };
@@ -56,6 +95,12 @@ const AiAssistant = () => {
         from: msg.from,
         text: msg.text
       }));
+
+      console.log('Sending AI request:', {
+        doctorId,
+        message: input,
+        conversationHistoryLength: conversationHistory.length
+      });
 
       const response = await aiService.getChatResponse(doctorId, input, conversationHistory);
       
@@ -118,6 +163,10 @@ const AiAssistant = () => {
     }, 100);
   };
 
+  // Check if user is authenticated
+  const isAuthenticated = !!doctorId;
+  const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -141,7 +190,7 @@ const AiAssistant = () => {
                     <button
                       key={index}
                       onClick={() => handleQuickAction(action.query)}
-                      disabled={isLoading || !doctorId}
+                      disabled={isLoading || !isAuthenticated}
                       className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {action.label}
@@ -239,26 +288,26 @@ const AiAssistant = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder={doctorId ? "Ask me anything about medical topics..." : "Please log in to use the AI assistant"}
-                  disabled={isLoading || !doctorId}
+                  placeholder={isAuthenticated ? "Ask me anything about medical topics..." : "Please log in to use the AI assistant"}
+                  disabled={isLoading || !isAuthenticated}
                   className="flex-1 bg-transparent focus:outline-none text-purple-700 text-sm disabled:opacity-50"
                 />
                 <button 
                   className="text-purple-600 hover:text-purple-800 mr-8 disabled:opacity-50"
-                  disabled={isLoading || !doctorId}
+                  disabled={isLoading || !isAuthenticated}
                 >
                   <img src="/attatch.svg" alt="Attach"/>
                 </button>
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || isLoading || !doctorId}
+                  disabled={!input.trim() || isLoading || !isAuthenticated}
                   className="bg-[#7a4de6] text-white px-5 py-1.5 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#6a3dd6] transition-colors"
                 >
                   {isLoading ? "Sending..." : "Send"}
                 </button>
               </div>
               
-              {!doctorId && (
+              {!isAuthenticated && (
                 <div className="mt-2 text-center">
                   <p className="text-xs text-gray-600">
                     Please log in to access the AI medical assistant

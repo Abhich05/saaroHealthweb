@@ -97,7 +97,7 @@ export const printPrescription = (patient, formData, doctorInfo, customSections)
     printWindow.print();
     
     // Close the window after printing (optional)
-    // printWindow.close();
+    printWindow.close();
   }, 500);
 };
 
