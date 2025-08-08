@@ -1207,244 +1207,234 @@ const Invoice = () => {
           </div>
         </Modal>
 
-        {/* Enhanced Invoice Modal */}
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setIsEditing(false);
-            setEditingInvoiceId(null);
-            setFormData(emptyForm);
-            setShowMoreOptions(false);
-          }}
-          title={isEditing ? "Edit Invoice" : "Create Invoice"}
-        >
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-[#fefefe] rounded-xl shadow-xl w-full max-w-4xl p-8 relative max-h-[90vh] overflow-y-auto">
-              {/* Close button */}
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setIsEditing(false);
-                  setEditingInvoiceId(null);
-                  setFormData(emptyForm);
-                  setShowMoreOptions(false);
-                }}
-                className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-black"
-              >
-                &times;
-              </button>
-
-              <h2 className="text-2xl font-semibold mb-4 text-[#322e45]">
-                {isEditing ? "Edit Invoice" : "Create Invoice"}
-              </h2>
-
-              {/* Auto-save indicator */}
-              <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded-lg">
-                <span className="text-sm text-green-700">
-                  💾 Auto-save enabled - Your changes are automatically saved
-                </span>
+        {/* Simple Invoice Modal - No Scrolling */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {isEditing ? "Edit Invoice" : "Create Invoice"}
+                </h2>
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsEditing(false);
+                    setEditingInvoiceId(null);
+                    setFormData(emptyForm);
+                    setShowMoreOptions(false);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  ×
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input 
-                  placeholder="UID (required)" 
-                  className="border border-gray-300 px-4 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  value={formData.uid} 
-                  onChange={(e) => handleInputChange("uid", e.target.value)} 
-                />
-                <input 
-                  placeholder="Name" 
-                  className="border border-gray-300 px-4 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  value={formData.name} 
-                  onChange={(e) => handleInputChange("name", e.target.value)} 
-                />
-                <input 
-                  placeholder="Phone" 
-                  className="border border-gray-300 px-4 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  value={formData.phone} 
-                  onChange={(e) => handleInputChange("phone", e.target.value)} 
-                />
-                
-                {/* Payment Status select with custom arrow */}
-                <div className="relative w-full mb-2">
+              {/* Content */}
+              <div className="p-4">
+                {/* Auto-save indicator */}
+                <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                  💾 Auto-save enabled
+                </div>
+
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                  <input 
+                    placeholder="UID *" 
+                    className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    value={formData.uid} 
+                    onChange={(e) => handleInputChange("uid", e.target.value)} 
+                  />
+                  <input 
+                    placeholder="Patient Name" 
+                    className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    value={formData.name} 
+                    onChange={(e) => handleInputChange("name", e.target.value)} 
+                  />
+                  <input 
+                    placeholder="Phone" 
+                    className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    value={formData.phone} 
+                    onChange={(e) => handleInputChange("phone", e.target.value)} 
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                   <select
-                    className={`w-full border p-2 pr-10 rounded-md appearance-none bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formData.paymentStatus === "" ? "text-gray-400" : "text-black"
-                    }`}
+                    className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.paymentStatus}
                     onChange={(e) => handleInputChange("paymentStatus", e.target.value)}
                   >
-                    <option value="">Select Payment Status</option>
+                    <option value="">Payment Status</option>
                     <option value="Billed">Billed</option>
                     <option value="Unbilled">Unbilled</option>
                     <option value="Partially Paid">Partially Paid</option>
                   </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600">
-                    ▼
-                  </div>
-                </div>
-
-                <input 
-                  placeholder="Private Notes" 
-                  className="border border-gray-300 px-4 py-2 rounded-md col-span-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  value={formData.privateNotes} 
-                  onChange={(e) => handleInputChange("privateNotes", e.target.value)} 
-                />
-              </div>
-
-              {/* Services */}
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-medium text-gray-800">Services</h3>
-                  <button
-                    onClick={() => {
-                      setFormData(prev => ({
-                        ...prev,
-                        services: [...prev.services, { service: "", qty: 1, amount: 0, discount: 0 }]
-                      }));
-                    }}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    + Add Service
-                  </button>
-                </div>
-                <div className="grid grid-cols-4 gap-4 font-medium text-sm text-gray-600 mb-2">
-                  <span>Service</span>
-                  <span>Qty</span>
-                  <span>Amount</span>
-                  <span>Discount</span>
-                </div>
-                {formData.services.map((s, idx) => (
-                  <div key={idx} className="grid grid-cols-4 gap-4 mb-2">
-                    <input 
-                      placeholder="Service" 
-                      className="border border-gray-300 px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                      value={s.service} 
-                      onChange={(e) => handleServiceChange(idx, "service", e.target.value)} 
-                    />
-                    <input 
-                      placeholder="Qty" 
-                      inputMode="numeric" 
-                      pattern="[0-9]*" 
-                      className="border border-gray-300 px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                      value={s.qty === 0 ? "" : s.qty} 
-                      onChange={(e) => handleServiceChange(idx, "qty", parseInt(e.target.value) || 0)} 
-                    />
-                    <input 
-                      placeholder="Amount" 
-                      inputMode="numeric" 
-                      pattern="[0-9]*" 
-                      className="border border-gray-300 px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                      value={s.amount === 0 ? "" : s.amount} 
-                      onChange={(e) => handleServiceChange(idx, "amount", parseFloat(e.target.value) || 0)} 
-                    />
-                    <div className="flex gap-2">
-                      <input 
-                        placeholder="Discount" 
-                        inputMode="numeric" 
-                        pattern="[0-9]*" 
-                        className="border border-gray-300 px-3 py-2 rounded-md flex-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                        value={s.discount === 0 ? "" : s.discount} 
-                        onChange={(e) => handleServiceChange(idx, "discount", parseFloat(e.target.value) || 0)} 
-                      />
-                      {formData.services.length > 1 && (
-                        <button
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              services: prev.services.filter((_, index) => index !== idx)
-                            }));
-                          }}
-                          className="px-2 py-2 text-red-600 hover:text-red-800"
-                          title="Remove service"
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <textarea 
-                placeholder="Patient Note" 
-                className="border border-gray-300 px-4 py-2 rounded-md mt-4 w-full resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                value={formData.patientNote} 
-                onChange={(e) => handleInputChange("patientNote", e.target.value)} 
-              />
-              
-              {/* More Options Button */}
-              <button
-                className="px-4 py-1 mt-2 border rounded-full text-sm font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200"
-                onClick={() => setShowMoreOptions(!showMoreOptions)}
-              >
-                {showMoreOptions ? "Hide Options" : "... More Options"}
-              </button>
-
-              {/* More Options Content */}
-              {showMoreOptions && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                  <input
-                    placeholder="Additional Discount"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="border border-gray-300 px-4 py-2 pr-10 rounded-md w-full leading-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={formData.additionalDiscount}
-                    onChange={(e) => handleInputChange("additionalDiscount", parseFloat(e.target.value) || 0)}
+                  <input 
+                    placeholder="Private Notes" 
+                    className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    value={formData.privateNotes} 
+                    onChange={(e) => handleInputChange("privateNotes", e.target.value)} 
                   />
-                  <div className="relative w-full">
-                    <select
-                      className="border border-gray-300 px-4 py-2 pr-10 rounded-md appearance-none w-full leading-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={formData.paymentMode}
-                      onChange={(e) => handleInputChange("paymentMode", e.target.value)}
+                </div>
+
+                {/* Services */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium text-gray-800">Services</h3>
+                    <button
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          services: [...prev.services, { service: "", qty: 1, amount: 0, discount: 0 }]
+                        }));
+                      }}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                     >
-                      <option>Cash</option>
-                      <option>Credit Card</option>
-                      <option>UPI</option>
-                      <option>Online</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-600 text-sm">
-                      ▼
-                    </div>
+                      + Add Service
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {formData.services.map((s, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                        <input 
+                          placeholder="Service" 
+                          className="col-span-5 border border-gray-300 px-2 py-1 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                          value={s.service} 
+                          onChange={(e) => handleServiceChange(idx, "service", e.target.value)} 
+                        />
+                        <input 
+                          placeholder="Qty" 
+                          inputMode="numeric" 
+                          className="col-span-2 border border-gray-300 px-2 py-1 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                          value={s.qty === 0 ? "" : s.qty} 
+                          onChange={(e) => handleServiceChange(idx, "qty", parseInt(e.target.value) || 0)} 
+                        />
+                        <input 
+                          placeholder="Amount" 
+                          inputMode="numeric" 
+                          className="col-span-2 border border-gray-300 px-2 py-1 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                          value={s.amount === 0 ? "" : s.amount} 
+                          onChange={(e) => handleServiceChange(idx, "amount", parseFloat(e.target.value) || 0)} 
+                        />
+                        <input 
+                          placeholder="Discount" 
+                          inputMode="numeric" 
+                          className="col-span-2 border border-gray-300 px-2 py-1 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                          value={s.discount === 0 ? "" : s.discount} 
+                          onChange={(e) => handleServiceChange(idx, "discount", parseFloat(e.target.value) || 0)} 
+                        />
+                        <div className="col-span-1 flex justify-center">
+                          {formData.services.length > 1 && (
+                            <button
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  services: prev.services.filter((_, index) => index !== idx)
+                                }));
+                              }}
+                              className="text-red-500 hover:text-red-700 p-1"
+                              title="Remove service"
+                            >
+                              <FiTrash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
 
-              {/* Sticky footer */}
-              <div className="sticky bottom-0 bg-[#fefefe] mt-8 p-2 border-t">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full text-sm">
-                  <div className="text-gray-700 space-y-1">
-                    <div>Total Amount: ₹ {formData.services.reduce((acc, s) => acc + ((s.qty * s.amount) - s.discount || 0), 0)}</div>
-                    <div className="font-semibold text-base">Grand Total: ₹ {
+                {/* Patient Notes */}
+                <div className="mb-4">
+                  <textarea 
+                    placeholder="Patient Notes" 
+                    rows={2}
+                    className="w-full border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" 
+                    value={formData.patientNote} 
+                    onChange={(e) => handleInputChange("patientNote", e.target.value)} 
+                  />
+                </div>
+                
+                {/* More Options */}
+                <div className="mb-4">
+                  <button
+                    className="px-3 py-1 border border-purple-300 rounded text-sm text-purple-700 bg-purple-50 hover:bg-purple-100"
+                    onClick={() => setShowMoreOptions(!showMoreOptions)}
+                  >
+                    {showMoreOptions ? "Hide Options" : "More Options"}
+                  </button>
+
+                  {showMoreOptions && (
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        placeholder="Additional Discount"
+                        inputMode="numeric"
+                        className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={formData.additionalDiscount}
+                        onChange={(e) => handleInputChange("additionalDiscount", parseFloat(e.target.value) || 0)}
+                      />
+                      <select
+                        className="border border-gray-300 px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={formData.paymentMode}
+                        onChange={(e) => handleInputChange("paymentMode", e.target.value)}
+                      >
+                        <option value="">Payment Mode</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Online">Online</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Total and Actions */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pt-4 border-t">
+                  <div className="text-sm text-gray-700">
+                    <div>Subtotal: ₹ {formData.services.reduce((acc, s) => acc + ((s.qty * s.amount) - s.discount || 0), 0).toFixed(2)}</div>
+                    {formData.additionalDiscount > 0 && (
+                      <div className="text-red-600">Discount: -₹ {formData.additionalDiscount.toFixed(2)}</div>
+                    )}
+                    <div className="font-semibold text-base">Total: ₹ {
                       Math.max(
                         formData.services.reduce((acc, s) => acc + ((s.qty * s.amount) - s.discount || 0), 0)
                         - (formData.additionalDiscount || 0),
                         0
-                      )
+                      ).toFixed(2)
                     }</div>
                   </div>
 
-                  <div className="flex justify-end gap-4 w-full md:w-auto">
+                  <div className="flex gap-2 w-full md:w-auto">
                     <button
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-5 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setIsEditing(false);
+                        setEditingInvoiceId(null);
+                        setFormData(emptyForm);
+                        setShowMoreOptions(false);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100 flex-1 md:flex-none"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleCreateOrUpdateInvoice}
                       disabled={loading}
-                      className="px-5 py-2 rounded-md bg-[#6842ff] text-white hover:bg-[#472dc4] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex-1 md:flex-none flex items-center justify-center gap-2"
                     >
-                      {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Invoice" : "Create Invoice")}
+                      {loading && (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      )}
+                      {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update" : "Create")}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </Modal>
+        )}
 
       </div>
     </div>
