@@ -1,36 +1,121 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
+import aiService from "../api/aiService";
+import { toast } from "react-hot-toast";
 
 const AiAssistant = () => {
   const [messages, setMessages] = useState([
     {
-      from: "doctor",
-      name: "Dr. Ethan Carter",
-      avatar: "/profile2.png",
-      text: "What",
-    },
-    {
       from: "ai",
-      name: "AI",
+      name: "AI Assistant",
       avatar: "/ai.png",
-      text: "Common symptoms of the flu include",
-    },
+      text: "Hello! I'm your AI medical assistant. I can help you with medical information, symptom analysis, medication details, and more. How can I assist you today?",
+      timestamp: new Date().toISOString()
+    }
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [doctorId, setDoctorId] = useState(null);
+  const messagesEndRef = useRef(null);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
-    const newMessage = {
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    // Get doctor ID from localStorage or context
+    const storedDoctorId = localStorage.getItem('doctorId');
+    if (storedDoctorId) {
+      setDoctorId(storedDoctorId);
+    }
+  }, []);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading || !doctorId) return;
+
+    const userMessage = {
       from: "doctor",
       name: "Dr. Ethan Carter",
       avatar: "/profile2.png",
       text: input,
+      timestamp: new Date().toISOString()
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInput("");
+    setIsLoading(true);
+
+    try {
+      // Prepare conversation history for context
+      const conversationHistory = messages.map(msg => ({
+        from: msg.from,
+        text: msg.text
+      }));
+
+      const response = await aiService.getChatResponse(doctorId, input, conversationHistory);
+      
+      if (response.success) {
+        const aiMessage = {
+          from: "ai",
+          name: "AI Assistant",
+          avatar: "/ai.png",
+          text: response.data.message,
+          timestamp: response.data.timestamp
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        throw new Error(response.message || 'Failed to get AI response');
+      }
+    } catch (error) {
+      console.error('AI Chat Error:', error);
+      toast.error('Failed to get AI response. Please try again.');
+      
+      // Add error message
+      const errorMessage = {
+        from: "ai",
+        name: "AI Assistant",
+        avatar: "/ai.png",
+        text: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const quickActions = [
+    { label: "Symptom Analysis", query: "Can you help me analyze symptoms?" },
+    { label: "Medication Info", query: "I need information about medications" },
+    { label: "Diagnostic Tests", query: "What diagnostic tests might be relevant?" },
+    { label: "Medical Terms", query: "Can you explain medical terminology?" },
+    { label: "Treatment Guidelines", query: "What are the current treatment guidelines?" },
+    { label: "Emergency Signs", query: "What are the signs of medical emergencies?" }
+  ];
+
+  const handleQuickAction = async (query) => {
+    if (!doctorId) {
+      toast.error('Please log in to use the AI assistant');
+      return;
+    }
+    
+    setInput(query);
+    // Trigger send after setting input
+    setTimeout(() => {
+      handleSend();
+    }, 100);
   };
 
   return (
@@ -44,19 +129,40 @@ const AiAssistant = () => {
         <main className="flex-1 bg-white overflow-y-auto">
           <div className="flex flex-col h-full bg-[#fafafa]">
             <div className="text-center py-6 font-bold text-2xl text-gray-900">
-              AI Assistant
+              AI Medical Assistant
+            </div>
+
+            {/* Quick Actions */}
+            <div className="px-10 pb-4">
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+                <div className="flex flex-wrap gap-2">
+                  {quickActions.map((action, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleQuickAction(action.query)}
+                      disabled={isLoading || !doctorId}
+                      className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto px-10 space-y-6">
+            <div className="flex-1 overflow-y-auto px-10 space-y-6 pb-4">
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
                   className={`flex items-end ${
-                    msg.from === "doctor" ? "justify-end" : "justify-end"
+                    msg.from === "doctor" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <div className="flex items-center gap-2 max-w-[70%]">
+                  <div className={`flex items-center gap-2 max-w-[70%] ${
+                    msg.from === "doctor" ? "flex-row-reverse" : "flex-row"
+                  }`}>
                     {msg.from === "ai" && (
                       <img
                         src={msg.avatar}
@@ -64,7 +170,7 @@ const AiAssistant = () => {
                         className="w-8 h-8 rounded-full"
                       />
                     )}
-                    <div className="text-right">
+                    <div className={`${msg.from === "doctor" ? "text-right" : "text-left"}`}>
                       <p className="text-xs text-purple-600 font-medium mb-1">
                         {msg.name}
                       </p>
@@ -77,6 +183,11 @@ const AiAssistant = () => {
                       >
                         {msg.text}
                       </div>
+                      {msg.timestamp && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </p>
+                      )}
                     </div>
                     {msg.from === "doctor" && (
                       <img
@@ -88,6 +199,36 @@ const AiAssistant = () => {
                   </div>
                 </div>
               ))}
+              
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="flex items-end justify-start">
+                  <div className="flex items-center gap-2 max-w-[70%]">
+                    <img
+                      src="/ai.png"
+                      alt="AI"
+                      className="w-8 h-8 rounded-full"
+                    />
+                    <div className="text-left">
+                      <p className="text-xs text-purple-600 font-medium mb-1">
+                        AI Assistant
+                      </p>
+                      <div className="px-4 py-2 rounded-2xl text-sm font-medium bg-[#eeeafc] text-gray-800">
+                        <div className="flex items-center gap-2">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          </div>
+                          <span className="text-gray-600">Thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Chat Input */}
@@ -97,19 +238,33 @@ const AiAssistant = () => {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Chat with me..."
-                  className="flex-1 bg-transparent focus:outline-none text-purple-700 text-sm"
+                  onKeyPress={handleKeyPress}
+                  placeholder={doctorId ? "Ask me anything about medical topics..." : "Please log in to use the AI assistant"}
+                  disabled={isLoading || !doctorId}
+                  className="flex-1 bg-transparent focus:outline-none text-purple-700 text-sm disabled:opacity-50"
                 />
-                <button className="text-purple-600 hover:text-purple-800 mr-8">
-                  <img src="/attatch.svg"/>
+                <button 
+                  className="text-purple-600 hover:text-purple-800 mr-8 disabled:opacity-50"
+                  disabled={isLoading || !doctorId}
+                >
+                  <img src="/attatch.svg" alt="Attach"/>
                 </button>
                 <button
                   onClick={handleSend}
-                  className="bg-[#7a4de6] text-white px-5 py-1.5 rounded-full text-sm font-medium"
+                  disabled={!input.trim() || isLoading || !doctorId}
+                  className="bg-[#7a4de6] text-white px-5 py-1.5 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#6a3dd6] transition-colors"
                 >
-                  Send
+                  {isLoading ? "Sending..." : "Send"}
                 </button>
               </div>
+              
+              {!doctorId && (
+                <div className="mt-2 text-center">
+                  <p className="text-xs text-gray-600">
+                    Please log in to access the AI medical assistant
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </main>
