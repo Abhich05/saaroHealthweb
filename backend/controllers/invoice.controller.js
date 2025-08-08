@@ -144,6 +144,41 @@ const printInvoice = async (req, res) => {
   }
 }
 
+// Export invoices function
+const exportInvoices = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const { format = 'csv', dateRange, statusFilter, modeFilter, searchQuery } = req.query;
+
+    const result = await invoiceService.exportInvoices(doctorId, {
+      format,
+      dateRange,
+      statusFilter,
+      modeFilter,
+      searchQuery
+    });
+
+    if (result?.error) {
+      return res
+        .status(result.statusCode)
+        .send(result.error);
+    }
+
+    // Set appropriate headers for file download
+    const filename = `invoices_${new Date().toISOString().split('T')[0]}.${format}`;
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res
+      .status(result.statusCode)
+      .send(result.data);
+  } catch(error) {
+    res
+      .status(500)
+      .send(`Error: ${error}`);
+  }
+}
+
 module.exports = {
   createInvoice,
   getInvoicesByDoctorId,
@@ -151,4 +186,5 @@ module.exports = {
   updateInvoice,
   deleteInvoiceById,
   printInvoice,
+  exportInvoices,
 };

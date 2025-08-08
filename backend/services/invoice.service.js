@@ -2,6 +2,7 @@ const Invoice = require('../models/invoice');
 const { generateInvoiceId } = require('../utils/helpers');
 const { generateInvoicePDF } = require('../utils/pdfGenerator');
 const { validateInvoice } = require('../validations/invoice.validation');
+const xlsx = require('xlsx');
 
 const createInvoice = async ( doctorId, invoiceData, invoiceId ) => {
   try {
@@ -250,6 +251,121 @@ const printInvoice = async (invoiceId, doctorId) => {
   }
 }
 
+const exportInvoices = async (doctorId, options) => {
+  try {
+    const { format = 'csv', dateRange, statusFilter, modeFilter, searchQuery } = options;
+
+    // Build query based on filters
+    let query = { doctorId };
+    
+    if (statusFilter && statusFilter !== 'All') {
+      query.paymentStatus = statusFilter;
+    }
+    
+    if (modeFilter && modeFilter !== 'All') {
+      query.paymentMode = modeFilter;
+    }
+
+    // Apply date range filter
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      let startDate;
+      
+      switch (dateRange) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'quarter':
+          const quarter = Math.floor(now.getMonth() / 3);
+          startDate = new Date(now.getFullYear(), quarter * 3, 1);
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      query.$or = [
+        { name: { $regex: searchQuery, $options: 'i' } },
+        { uid: { $regex: searchQuery, $options: 'i' } },
+        { invoiceId: { $regex: searchQuery, $options: 'i' } }
+      ];
+    }
+
+    const invoices = await Invoice.find(query).sort({ createdAt: -1 });
+
+    // Transform data for export
+    const exportData = invoices.map(invoice => ({
+      'Invoice ID': invoice.invoiceId,
+      'Patient Name': invoice.name,
+      'UID': invoice.uid,
+      'Phone': invoice.phone,
+      'Date': invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : '',
+      'Amount (₹)': invoice.totalAmount,
+      'Status': invoice.paymentStatus,
+      'Payment Mode': invoice.paymentMode,
+      'Private Notes': invoice.privateNote || '',
+      'Patient Notes': invoice.patientNote || '',
+      'Additional Discount': invoice.additionalDiscountAmount || 0,
+      'Services': invoice.items ? invoice.items.map(item => 
+        `${item.service} (Qty: ${item.quantity}, Amount: ₹${item.amount}, Discount: ₹${item.discount})`
+      ).join('; ') : ''
+    }));
+
+    let data, contentType, filename;
+
+    if (format === 'xlsx') {
+      // Create Excel workbook
+      const workbook = xlsx.utils.book_new();
+      const worksheet = xlsx.utils.json_to_sheet(exportData);
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Invoices');
+      
+      // Generate buffer
+      const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      
+      return {
+        statusCode: 200,
+        data: buffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      };
+    } else if (format === 'csv') {
+      // Create CSV
+      const worksheet = xlsx.utils.json_to_sheet(exportData);
+      const csv = xlsx.utils.sheet_to_csv(worksheet);
+      
+      return {
+        statusCode: 200,
+        data: csv,
+        contentType: 'text/csv'
+      };
+    } else {
+      return {
+        statusCode: 400,
+        error: 'Unsupported export format'
+      };
+    }
+  } catch (error) {
+    return {
+      statusCode: 500,
+      error: error.message
+    };
+  }
+};
+
 module.exports = {
   createInvoice,
   getInvoicesByDoctorId,
@@ -257,4 +373,5 @@ module.exports = {
   updateInvoice,
   deleteInvoiceById,
   printInvoice,
+  exportInvoices,
 };

@@ -26,6 +26,8 @@ const AiAssistant = () => {
   const contextDoctorName = useContext(DoctorNameContext);
   const user = useContext(UserContext);
 
+  const isDevelopment = import.meta.env.DEV;
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -52,20 +54,24 @@ const AiAssistant = () => {
       currentDoctorName = contextDoctorName || localStorage.getItem('doctorName') || "";
     }
 
-    console.log('AI Assistant - Authentication Debug:', {
-      isUserLogin,
-      contextDoctorId,
-      localStorageDoctorId: localStorage.getItem('doctorId'),
-      userDoctorId: user?.doctorId,
-      currentDoctorId,
-      currentDoctorName
-    });
+    if (isDevelopment) {
+      console.log('AI Assistant - Authentication Debug:', {
+        isUserLogin,
+        contextDoctorId,
+        localStorageDoctorId: localStorage.getItem('doctorId'),
+        userDoctorId: user?.doctorId,
+        currentDoctorId,
+        currentDoctorName
+      });
+    }
 
     if (currentDoctorId) {
       setDoctorId(currentDoctorId);
       setDoctorName(currentDoctorName);
     } else {
-      console.log('No doctor ID found - user may not be authenticated');
+      if (isDevelopment) {
+        console.log('No doctor ID found - user may not be authenticated');
+      }
     }
   }, [contextDoctorId, contextDoctorName, user]);
 
@@ -96,11 +102,13 @@ const AiAssistant = () => {
         text: msg.text
       }));
 
-      console.log('Sending AI request:', {
-        doctorId,
-        message: input,
-        conversationHistoryLength: conversationHistory.length
-      });
+      if (isDevelopment) {
+        console.log('Sending AI request:', {
+          doctorId,
+          message: input,
+          conversationHistoryLength: conversationHistory.length
+        });
+      }
 
       const response = await aiService.getChatResponse(doctorId, input, conversationHistory);
       
