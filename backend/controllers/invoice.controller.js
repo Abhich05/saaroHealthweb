@@ -147,6 +147,8 @@ const printInvoice = async (req, res) => {
 // Export invoices function
 const exportInvoices = async (req, res) => {
   try {
+    console.log('Export invoices controller called with params:', req.params);
+    console.log('Export invoices controller called with query:', req.query);
     const { doctorId } = req.params;
     const { format = 'csv', dateRange, statusFilter, modeFilter, searchQuery } = req.query;
 
@@ -173,6 +175,7 @@ const exportInvoices = async (req, res) => {
       .status(result.statusCode)
       .send(result.data);
   } catch(error) {
+    console.error('Export invoices controller error:', error);
     res
       .status(500)
       .send(`Error: ${error}`);

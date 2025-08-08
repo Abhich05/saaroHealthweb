@@ -256,6 +256,7 @@ const printInvoice = async (invoiceId, doctorId) => {
 
 const exportInvoices = async (doctorId, options) => {
   try {
+    console.log('Export invoices called with:', { doctorId, options });
     const { format = 'csv', dateRange, statusFilter, modeFilter, searchQuery } = options;
 
     // Build query based on filters
@@ -310,6 +311,7 @@ const exportInvoices = async (doctorId, options) => {
     }
 
     const invoices = await Invoice.find(query).sort({ createdAt: -1 });
+    console.log('Found invoices for export:', invoices.length);
 
     // Transform data for export
     const exportData = invoices.map(invoice => ({
@@ -346,7 +348,15 @@ const exportInvoices = async (doctorId, options) => {
         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       };
     } else if (format === 'csv') {
-      // Create CSV
+      // Create CSV with proper handling
+      if (exportData.length === 0) {
+        return {
+          statusCode: 200,
+          data: '',
+          contentType: 'text/csv'
+        };
+      }
+      
       const worksheet = xlsx.utils.json_to_sheet(exportData);
       const csv = xlsx.utils.sheet_to_csv(worksheet);
       
@@ -361,7 +371,8 @@ const exportInvoices = async (doctorId, options) => {
         error: 'Unsupported export format'
       };
     }
-  } catch (error) {
+      } catch (error) {
+    console.error('Export invoices error:', error);
     return {
       statusCode: 500,
       error: error.message
