@@ -41,6 +41,46 @@ const InvoiceSchema = zod.object({
   patientNote: zod.string().optional(),
 });
 
+// Schema for partial updates (used for status updates)
+const InvoiceUpdateSchema = zod.object({
+  name: zod
+    .string()
+    .min(1, { message: 'Name is required.' })
+    .trim()
+    .optional(),
+  uid: zod
+    .string()
+    .min(1, { message: 'UID is required.' })
+    .trim()
+    .optional(),
+  phone: zod
+    .string()
+    .regex(/^\d{10}$/, { message: 'Phone number must be a 10-digit number.' })
+    .optional(),
+  paymentStatus: zod
+    .string()
+    .default('Unbilled')
+    .optional(),
+  privateNote: zod.string().optional(),
+  items: zod
+    .array(ItemSchema)
+    .min(1, { message: 'At least one item is required.' })
+    .optional(),
+  additionalDiscountAmount: zod
+    .number()
+    .min(0, { message: 'Discount amount cannot be negative.' })
+    .optional(),
+  totalAmount: zod
+    .number()
+    .min(0, { message: 'Total amount must be at least 0.' })
+    .optional(),
+  paymentMode: zod
+    .string()
+    .default('Cash')
+    .optional(),
+  patientNote: zod.string().optional(),
+});
+
 const validateInvoice = (invoiceData) => {
   const result = InvoiceSchema.safeParse(invoiceData);
 
@@ -62,6 +102,28 @@ const validateInvoice = (invoiceData) => {
   };
 };
 
+const validateInvoiceUpdate = (invoiceData) => {
+  const result = InvoiceUpdateSchema.safeParse(invoiceData);
+
+  if (!result.success) {
+    const errors = result.error.errors.map((err) => ({
+      field: err.path.join('.'),
+      message: err.message,
+    }));
+
+    return {
+      success: false,
+      errors,
+    };
+  }
+
+  return {
+    success: true,
+    data: result.data,
+  };
+};
+
 module.exports = {
   validateInvoice,
+  validateInvoiceUpdate,
 };

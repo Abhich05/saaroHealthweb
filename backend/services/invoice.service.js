@@ -1,7 +1,7 @@
 const Invoice = require('../models/invoice');
 const { generateInvoiceId } = require('../utils/helpers');
 const { generateInvoicePDF } = require('../utils/pdfGenerator');
-const { validateInvoice } = require('../validations/invoice.validation');
+const { validateInvoice, validateInvoiceUpdate } = require('../validations/invoice.validation');
 const xlsx = require('xlsx');
 
 const createInvoice = async ( doctorId, invoiceData, invoiceId ) => {
@@ -152,7 +152,8 @@ const updateInvoice = async (invoiceId, doctorId, invoiceData) => {
       patientNote,
     } = invoiceData;
 
-    const invoiceValidation = validateInvoice(invoiceData);
+    // Use update validation for partial updates
+    const invoiceValidation = validateInvoiceUpdate(invoiceData);
     if (!invoiceValidation.success) {
       return {
         statusCode: 400,
@@ -160,20 +161,22 @@ const updateInvoice = async (invoiceId, doctorId, invoiceData) => {
       };
     }
 
+    // Build update object with only provided fields
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (uid !== undefined) updateFields.uid = uid;
+    if (phone !== undefined) updateFields.phone = phone;
+    if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
+    if (privateNote !== undefined) updateFields.privateNote = privateNote;
+    if (items !== undefined) updateFields.items = items;
+    if (additionalDiscountAmount !== undefined) updateFields.additionalDiscountAmount = additionalDiscountAmount;
+    if (totalAmount !== undefined) updateFields.totalAmount = totalAmount;
+    if (paymentMode !== undefined) updateFields.paymentMode = paymentMode;
+    if (patientNote !== undefined) updateFields.patientNote = patientNote;
+
     const invoice = await Invoice.findOneAndUpdate(
       { _id: invoiceId, doctorId },
-      {
-        name,
-        uid,
-        phone,
-        paymentStatus,
-        privateNote,
-        items,
-        additionalDiscountAmount,
-        totalAmount,
-        paymentMode,
-        patientNote,
-      },
+      updateFields,
       { new: true },
     );
 

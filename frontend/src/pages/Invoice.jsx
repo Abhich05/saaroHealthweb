@@ -48,6 +48,7 @@ const Invoice = () => {
   const [exportFormat, setExportFormat] = useState('csv');
   const [exportDateRange, setExportDateRange] = useState('all');
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [invoicesData, setInvoicesData] = useState([]);
   const doctorId = useContext(DoctorIdContext);
@@ -83,6 +84,9 @@ const Invoice = () => {
           status: inv.paymentStatus,
           mode: inv.paymentMode,
         }));
+        
+
+        
         setInvoicesData(mapped);
         setPagination(prev => ({
           ...prev,
@@ -96,7 +100,7 @@ const Invoice = () => {
         setError("Failed to fetch invoices. Please try again.");
       })
       .finally(() => setLoading(false));
-  }, [doctorId, pagination.page, pagination.limit, searchTerm, statusFilter, dateFilter, modeFilter]);
+  }, [doctorId, pagination.page, pagination.limit, searchTerm, statusFilter, dateFilter, modeFilter, refreshTrigger]);
 
   const emptyForm = {
     uid: "",
@@ -262,6 +266,7 @@ const Invoice = () => {
           const response = await axiosInstance.put(`/${doctorId}/invoice/${invoiceId}`, {
             paymentStatus: newStatus
           });
+          
           results.push(response.data);
           return { success: true, id: invoiceId };
         } catch (error) {
@@ -281,11 +286,14 @@ const Invoice = () => {
         toast.error(`${failed} invoices failed to update`);
       }
 
+
+
       setSelectedInvoices([]);
       setShowBulkActions(false);
       setIsSelectAll(false);
-      // Refresh data
-      setPagination(prev => ({ ...prev }));
+      
+      // Force refresh data
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       handleError(error, 'bulk update');
     } finally {
@@ -315,7 +323,7 @@ const Invoice = () => {
       setShowBulkActions(false);
       setIsSelectAll(false);
       // Refresh data
-      setPagination(prev => ({ ...prev }));
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Bulk delete error:', error);
       toast.error("Failed to delete some invoices");
@@ -445,7 +453,7 @@ const Invoice = () => {
       axiosInstance.put(updateUrl, invoiceData)
         .then((res) => {
           toast.success("Invoice updated successfully!");
-          setPagination(prev => ({ ...prev }));
+          setRefreshTrigger(prev => prev + 1);
           clearDraft();
         })
         .catch((err) => {
@@ -463,7 +471,7 @@ const Invoice = () => {
       axiosInstance.post(`/${doctorId}/invoice`, invoiceData)
         .then((res) => {
           toast.success("Invoice created successfully!");
-          setPagination(prev => ({ ...prev }));
+          setRefreshTrigger(prev => prev + 1);
           clearDraft();
         })
         .catch((err) => {
