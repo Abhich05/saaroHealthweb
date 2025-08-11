@@ -31,6 +31,7 @@ const CreateRx = () => {
   const doctorId = useContext(DoctorIdContext);
   const [rxData, setRxData] = useState([]);
   const [mappedData, setMappedData] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -305,6 +306,8 @@ const CreateRx = () => {
 
   const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
+  const filteredData = mappedData.filter(row => categoryFilter === "All" || row.category === categoryFilter);
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -319,6 +322,21 @@ const CreateRx = () => {
               </div>
             </div>
 
+            {/* Category Capsules */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['All','Follow-up','Emergency','Chronic'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3 lg:px-4 py-2 rounded-full text-xs lg:text-sm font-medium transition-all ${
+                    categoryFilter === cat ? 'bg-blue-100 text-blue-800 border-2 border-blue-300' : 'bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
             <SearchBar
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
@@ -327,7 +345,7 @@ const CreateRx = () => {
 
             <GenericTable
               columns={columns}
-              data={mappedData}
+              data={filteredData}
               loading={loading}
               loadingRows={8}
               renderCell={(row, accessor) => {

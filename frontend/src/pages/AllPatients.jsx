@@ -27,7 +27,7 @@ const columns = [
 
 const AllPatients = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("Category");
+  const [categoryFilter, setCategoryFilter] = useState("All");
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
@@ -57,6 +57,8 @@ const AllPatients = () => {
 
   const [pagination, setPagination] = useState({ totalPatients: 0, page: 1, limit: 7 });
   const rowsPerPage = 7;
+  // Filtered patients by category
+  const filteredPatients = patients.filter(p => categoryFilter === 'All' || p.category === categoryFilter);
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -140,15 +142,15 @@ const AllPatients = () => {
       });
   };
 
-  const filteredPatients = patients.filter((row) => {
-   const matchesSearch = ["name", "uid", "phone"].some((key) =>
-  row[key]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-);
+  //const filteredPatients = patients.filter((row) => {
+   //const matchesSearch = ["name", "uid", "phone"].some((key) =>
+  //row[key]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+//);
 
-    const matchesCategory =
-      categoryFilter === "Category" || categoryFilter === "All" || row.category === categoryFilter;
-    return matchesSearch && matchesCategory;
-  });
+    //const matchesCategory =
+      //categoryFilter === "Category" || categoryFilter === "All" || row.category === categoryFilter;
+    //return matchesSearch && matchesCategory;
+  //});
 
   const totalPages = Math.max(1, Math.ceil((pagination.totalPatients || patients.length) / pagination.limit));
 
@@ -215,11 +217,26 @@ const AllPatients = () => {
               </Button>
             </div>
 
-             <SearchBar
-      searchTerm={searchTerm}
-      setSearchTerm={setSearchTerm}
-      placeholder="Name, Phone, UID"
-    />
+            {/* Category Capsules */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['All','New','Follow-up','Chronic','Emergency'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3 lg:px-4 py-2 rounded-full text-xs lg:text-sm font-medium transition-all ${
+                    categoryFilter === cat ? 'bg-blue-100 text-blue-800 border-2 border-blue-300' : 'bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <SearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Name, Phone, UID"
+            />
 
             <div className="mb-4 relative">
               <button
@@ -251,7 +268,7 @@ const AllPatients = () => {
 
             <GenericTable
               columns={columns}
-              data={patients}
+              data={filteredPatients}
               loading={loading}
               loadingRows={10}
               renderCell={(row, accessor) => {

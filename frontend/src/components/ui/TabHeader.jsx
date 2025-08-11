@@ -1,7 +1,7 @@
 const TabHeader = ({ tabs, activeTabId, setActiveTabId }) => {
   return (
     <div className="w-full flex justify-center">
-      <div className="flex space-x-4 bg-white rounded-xl px-4 py-2 ">
+      <div className="flex flex-wrap gap-2">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
 
@@ -9,8 +9,8 @@ const TabHeader = ({ tabs, activeTabId, setActiveTabId }) => {
             <button
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
-              className={`relative pb-2 px-3 text-sm md:text-base transition font-medium ${
-                isActive ? "text-black border-b-2 border-black " : "text-gray-500 hover:text-black"
+              className={`px-3 lg:px-4 py-2 rounded-full text-xs lg:text-sm font-medium transition-all ${
+                isActive ? "bg-blue-100 text-blue-800 border-2 border-blue-300" : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
               }`}
             >
               {tab.label}
