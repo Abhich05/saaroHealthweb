@@ -30,96 +30,86 @@ const UserLoginPage = () => {
       newErrors.password = "Password must be at least 8 characters.";
     }
     setErrors(newErrors);
+
     if (Object.keys(newErrors).length === 0) {
-      setIsLoading(true); // Start loading immediately
+      setIsLoading(true);
       try {
-        const res = await axiosInstance.post("/user/login", {
-          email,
-          password,
-        });
-        
+        const res = await axiosInstance.post("/user/login", { email, password });
         if (res.data && res.data.user) {
-          // Store user information
-          localStorage.setItem('userId', res.data.user.id);
-          localStorage.setItem('userName', res.data.user.name);
-          localStorage.setItem('userRole', res.data.user.role);
-          localStorage.setItem('userPermissions', JSON.stringify(res.data.user.permissions));
-          localStorage.setItem('doctorId', res.data.user.doctorId);
-          localStorage.setItem('doctorName', res.data.user.doctorName);
-          localStorage.setItem('clinicName', res.data.user.clinicName);
-          localStorage.setItem('isUserLogin', 'true');
-          
-          // Store user JWT token using auth utility
-          // The token is already set as a cookie by the backend
-          // Also store it using the auth utility for consistency
+          localStorage.setItem("userId", res.data.user.id);
+          localStorage.setItem("userName", res.data.user.name);
+          localStorage.setItem("userRole", res.data.user.role);
+          localStorage.setItem("userPermissions", JSON.stringify(res.data.user.permissions));
+          localStorage.setItem("doctorId", res.data.user.doctorId);
+          localStorage.setItem("doctorName", res.data.user.doctorName);
+          localStorage.setItem("clinicName", res.data.user.clinicName);
+          localStorage.setItem("isUserLogin", "true");
+
           if (res.data.accessToken) {
             setUserToken(res.data.accessToken);
-            console.log('User JWT token stored using auth utility');
           }
-          console.log('User login successful, token set by backend');
-          
-          navigate('/'); // Navigate to dashboard
+          navigate("/");
         }
       } catch (err) {
         setSubmitError(err.response?.data?.error || "Login failed. Please try again.");
       } finally {
-        setIsLoading(false); // Stop loading regardless of success or error
+        setIsLoading(false);
       }
     }
   };
 
   const handleDoctorLogin = () => {
-    navigate('/login'); // Navigate to doctor login
+    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex flex-col">
       <Header2 />
 
-      <div className="flex flex-1 relative">
+      <div className="flex flex-1">
         {/* Left form section */}
-        <div className="w-1/2 flex items-center justify-center px-10 py-12">
-          <div className="w-full max-w-sm">
-            <h2 className="text-xl md:text-2xl font-semibold mb-6 text-center">
+        <div className="w-full md:w-1/2 flex items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
               Staff Login
             </h2>
 
             <div className="mb-4">
-              <p className="text-sm mb-1">Email Address</p>
+              <label className="text-sm font-medium text-gray-600">Email Address</label>
               <input
                 type="email"
-                placeholder="Enter your email"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => {
                   setErrors((prev) => ({ ...prev, email: "" }));
                   setEmail(e.target.value);
                 }}
-                className="w-full px-3 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 text-sm focus:outline-none"
+                className={`w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                  errors.email ? "border-red-400" : "border-gray-300"
+                }`}
               />
-              {errors.email && (
-                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-              )}
+              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
             </div>
 
-            <div className="mb-1">
-              <p className="text-sm mb-1">Password</p>
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-600">Password</label>
               <input
                 type="password"
-                placeholder="Enter your password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => {
                   setErrors((prev) => ({ ...prev, password: "" }));
                   setPassword(e.target.value);
                 }}
-                className="w-full px-3 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 text-sm focus:outline-none"
+                className={`w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                  errors.password ? "border-red-400" : "border-gray-300"
+                }`}
               />
-              {errors.password && (
-                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-              )}
+              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
             </div>
 
             <Button
-              className="w-full text-white rounded-full py-2 text-sm hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-purple-600 text-white rounded-full py-2 text-sm hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleLogin}
               disabled={isLoading}
             >
@@ -137,10 +127,10 @@ const UserLoginPage = () => {
               <p className="text-red-500 text-xs mt-2">{submitError}</p>
             )}
 
-            <p className="text-xs text-center mt-3">
+            <p className="text-xs text-center mt-4 text-gray-600">
               Are you a doctor?{" "}
               <span
-                className="text-purple-600 cursor-pointer hover:underline"
+                className="text-purple-600 font-medium hover:underline cursor-pointer"
                 onClick={handleDoctorLogin}
               >
                 Doctor Login
@@ -149,15 +139,17 @@ const UserLoginPage = () => {
           </div>
         </div>
 
-        {/* Right image section fixed to right bottom */}
-        <div className="w-1/2 hidden md:block relative">
-          <div className="absolute top-0 bottom-0 right-0 w-full h-full bg-gray-200 flex items-center justify-center">
-            <span className="text-gray-500">Image Placeholder</span>
-          </div>
+        {/* Right image section */}
+        <div className="hidden md:flex w-1/2 items-center justify-center p-8">
+          <img
+            src="https://images.unsplash.com/photo-1584515933487-779824d29309?auto=format&fit=crop&w=1000&q=80"
+            alt="Medical staff illustration"
+            className="rounded-2xl shadow-2xl w-full h-full object-cover"
+          />
         </div>
       </div>
     </div>
   );
 };
 
-export default UserLoginPage; 
+export default UserLoginPage;
