@@ -1,0 +1,10 @@
+python-docx==0.8.11
+SpeechRecognition==3.8.1
+PyAudio==0.2.13
+nltk==3.8.1
+spacy==2.3.5
+nameparser==1.1.0
+med7==0.0.0
+# Note: med7 is fetched as a model package for spaCy; the original README used a direct URL install for en_core_med7_lg
+# If installing the spaCy model directly, run:
+# pip install https://med7.s3.eu-west-2.amazonaws.com/en_core_med7_lg.tar.gz

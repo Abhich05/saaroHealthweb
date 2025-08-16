@@ -327,6 +327,11 @@ const ConsultationForm = () => {
 
   const [showNewSectionForm, setShowNewSectionForm] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showMicModal, setShowMicModal] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [micError, setMicError] = useState('');
+  const [selectedTarget, setSelectedTarget] = useState('complaints');
+  const [transcript, setTranscript] = useState('');
   const [showCustomTemplateForm, setShowCustomTemplateForm] = useState(false);
   const [showPrescriptionPreview, setShowPrescriptionPreview] = useState(false);
   const [newSectionData, setNewSectionData] = useState({ heading: '', label: '', type: '', options: '' });
@@ -452,6 +457,199 @@ const ConsultationForm = () => {
       console.error('Error saving custom template:', error);
       toast.error(error?.response?.data?.error || 'Failed to save custom template');
     }
+  };
+
+  // --- Speech recognition helpers ---
+  const startRecognition = () => {
+    setMicError('');
+    setTranscript('');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMicError('Speech Recognition API is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsRecording(true);
+      recognition.onerror = (e) => {
+        console.error('Speech recognition error', e);
+        setMicError(e.error || 'Microphone error');
+        setIsRecording(false);
+        recognition.stop?.();
+      };
+
+      recognition.onresult = (event) => {
+        const text = (event.results[0] && event.results[0][0].transcript) || '';
+        setTranscript(text);
+        // populate the selected field with the recognized text
+        applyTranscriptToTarget(text);
+      };
+
+      recognition.onend = () => setIsRecording(false);
+
+      // store on window so stop can access it
+      window.__mysaaro_recognition = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error(err);
+      setMicError('Failed to start speech recognition');
+    }
+  };
+
+  const stopRecognition = () => {
+    try {
+      const recognition = window.__mysaaro_recognition;
+      if (recognition) {
+        recognition.onresult = null;
+        recognition.onend = null;
+        recognition.onerror = null;
+        recognition.stop();
+        delete window.__mysaaro_recognition;
+      }
+    } catch (err) {
+      console.error('Error stopping recognition', err);
+    }
+    setIsRecording(false);
+  };
+
+  const applyTranscriptToTarget = (text) => {
+    if (!text) return;
+    setFormData(prev => {
+      const next = { ...prev };
+      switch (selectedTarget) {
+        case 'vital_bp':
+          next.vitals = { ...next.vitals, bp: text };
+          break;
+        case 'vital_pulse':
+          next.vitals = { ...next.vitals, pulse: text };
+          break;
+        case 'vital_height':
+          next.vitals = { ...next.vitals, height: text };
+          break;
+        case 'vital_weight':
+          next.vitals = { ...next.vitals, weight: text };
+          break;
+        case 'vital_temperature':
+          next.vitals = { ...next.vitals, temperature: text };
+          break;
+        case 'vital_spo2':
+          next.vitals = { ...next.vitals, spo2: text };
+          break;
+        case 'vital_rbs':
+          next.vitals = { ...next.vitals, rbs: text };
+          break;
+        case 'complaints': {
+          const idx = next.complaints.findIndex(c => !c.text?.trim());
+          if (idx === -1) next.complaints.push({ id: crypto.randomUUID(), text });
+          else next.complaints[idx].text = text;
+          break;
+        }
+        case 'pastHistory':
+        case 'history': {
+          const idx = next.pastHistory.findIndex(h => !h.value?.trim());
+          if (idx === -1) next.pastHistory.push({ id: crypto.randomUUID(), value: text });
+          else next.pastHistory[idx].value = text;
+          break;
+        }
+        case 'surgicalHistory': {
+          const idx = next.surgicalHistory.findIndex(h => !h.value?.trim());
+          if (idx === -1) next.surgicalHistory.push({ id: crypto.randomUUID(), value: text });
+          else next.surgicalHistory[idx].value = text;
+          break;
+        }
+        case 'drugAllergy': {
+          const idx = next.drugAllergy.findIndex(h => !h.value?.trim());
+          if (idx === -1) next.drugAllergy.push({ id: crypto.randomUUID(), value: text });
+          else next.drugAllergy[idx].value = text;
+          break;
+        }
+        case 'examination': {
+          const idx = next.physicalExamination.findIndex(h => !h.text?.trim());
+          if (idx === -1) next.physicalExamination.push({ id: crypto.randomUUID(), text });
+          else next.physicalExamination[idx].text = text;
+          break;
+        }
+        case 'diagnosis_provisional': {
+          const idx = next.diagnosis.provisional.findIndex(d => !d.value?.trim());
+          if (idx === -1) next.diagnosis.provisional.push({ id: crypto.randomUUID(), value: text });
+          else next.diagnosis.provisional[idx].value = text;
+          break;
+        }
+        case 'diagnosis_final': {
+          const idx = next.diagnosis.final.findIndex(d => !d.value?.trim());
+          if (idx === -1) next.diagnosis.final.push({ id: crypto.randomUUID(), value: text });
+          else next.diagnosis.final[idx].value = text;
+          break;
+        }
+        case 'tests': {
+          const idx = next.tests.findIndex(t => !t.value?.trim());
+          if (idx === -1) next.tests.push({ id: crypto.randomUUID(), value: text });
+          else next.tests[idx].value = text;
+          break;
+        }
+        case 'testNotes': {
+          const idx = next.testNotes.findIndex(t => !t.value?.trim());
+          if (idx === -1) next.testNotes.push({ id: crypto.randomUUID(), value: text });
+          else next.testNotes[idx].value = text;
+          break;
+        }
+        case 'med_name': {
+          if (!next.medication || next.medication.length === 0) next.medication = [{ id: crypto.randomUUID(), name: text, dosage: '', frequency: '', duration: '', notes: '' }];
+          else next.medication[0].name = text;
+          break;
+        }
+        case 'med_dosage': {
+          if (!next.medication || next.medication.length === 0) next.medication = [{ id: crypto.randomUUID(), name: '', dosage: text, frequency: '', duration: '', notes: '' }];
+          else next.medication[0].dosage = text;
+          break;
+        }
+        case 'med_frequency': {
+          if (!next.medication || next.medication.length === 0) next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: text, duration: '', notes: '' }];
+          else next.medication[0].frequency = text;
+          break;
+        }
+        case 'med_duration': {
+          if (!next.medication || next.medication.length === 0) next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: '', duration: text, notes: '' }];
+          else next.medication[0].duration = text;
+          break;
+        }
+        case 'med_notes': {
+          if (!next.medication || next.medication.length === 0) next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: '', duration: '', notes: text }];
+          else next.medication[0].notes = text;
+          break;
+        }
+        case 'advice':
+          next.advice = (next.advice ? next.advice + ' ' : '') + text;
+          break;
+        case 'followUp': {
+          if (!next.followUp || next.followUp.length === 0) next.followUp = [text];
+          else next.followUp[0] = text;
+          break;
+        }
+        default: {
+          if (selectedTarget && selectedTarget.startsWith('custom:')) {
+            const sectionId = selectedTarget.split(':')[1];
+            const section = customSections.find(s => s.id === sectionId);
+            if (section) {
+              if (section.fields && section.fields.length > 0) {
+                const field = section.fields[0];
+                const values = field.values || [];
+                const idx = values.findIndex(v => !v.value?.trim());
+                if (idx === -1) values.push({ id: crypto.randomUUID(), value: text });
+                else values[idx].value = text;
+                setCustomSections(prev => prev.map(s => s.id === sectionId ? { ...section, fields: [ { ...field, values }, ...section.fields.slice(1) ] } : s));
+              }
+            }
+          }
+        }
+      }
+      return next;
+    });
   };
 
  const handleInputChange = (sectionId, fieldIdx, inputIdx, newValue) => {
@@ -748,7 +946,8 @@ const ConsultationForm = () => {
                   
                   <Button 
                     className="rounded-full p-3"
-                    variant="primary"
+                    variant={isRecording ? "danger" : "primary"}
+                    onClick={() => setShowMicModal(true)}
                   >
                     <FaMicrophone size={18} />
                   </Button>
@@ -841,12 +1040,82 @@ const ConsultationForm = () => {
         inbuiltTemplates={INBUILT_TEMPLATES}
       />
 
-      {/* Add Section Modal */}
-      <AddSectionModal
-        isOpen={showNewSectionForm}
-        onClose={() => setShowNewSectionForm(false)}
-        onAddSection={handleAddCustomSection}
-      />
+      {/* Microphone / Speech Recognition Modal */}
+      <Modal
+        isOpen={showMicModal}
+        onClose={() => {
+          stopRecognition();
+          setShowMicModal(false);
+          setMicError('');
+        }}
+        title="Voice Input"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium">Target Field</label>
+            <select value={selectedTarget} onChange={(e) => setSelectedTarget(e.target.value)} className="w-full border rounded p-2 mt-1">
+              <optgroup label="Vitals">
+                <option value="vital_bp">Blood Pressure (mmHg)</option>
+                <option value="vital_pulse">Pulse Rate (bpm)</option>
+                <option value="vital_height">Height (cm)</option>
+                <option value="vital_weight">Weight (kg)</option>
+                <option value="vital_temperature">Temperature (°F/°C)</option>
+                <option value="vital_spo2">SpO2 (%)</option>
+                <option value="vital_rbs">RBS (mg/dL)</option>
+              </optgroup>
+              <optgroup label="History / Findings">
+                <option value="complaints">Chief Complaints</option>
+                <option value="pastHistory">Past History</option>
+                <option value="surgicalHistory">Surgical History</option>
+                <option value="drugAllergy">Drug Allergy</option>
+                <option value="examination">Physical Examination</option>
+              </optgroup>
+              <optgroup label="Diagnosis">
+                <option value="diagnosis_provisional">Provisional Diagnosis</option>
+                <option value="diagnosis_final">Final Diagnosis</option>
+              </optgroup>
+              <optgroup label="Investigations">
+                <option value="tests">Investigations / Lab Test</option>
+                <option value="testNotes">Note for Lab</option>
+              </optgroup>
+              <optgroup label="Medication">
+                <option value="med_name">Medicine Name</option>
+                <option value="med_dosage">Dosage</option>
+                <option value="med_frequency">Frequency</option>
+                <option value="med_duration">Duration</option>
+                <option value="med_notes">Medication Notes</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="advice">Advice</option>
+                <option value="followUp">Follow-up (date or note)</option>
+              </optgroup>
+              {customSections.map(s => (
+                <option key={s.id} value={`custom:${s.id}`}>{s.heading}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button variant={isRecording ? 'danger' : 'primary'} onClick={() => { if (!isRecording) startRecognition(); else stopRecognition(); }}>
+              {isRecording ? 'Stop' : 'Start'} Recording
+            </Button>
+            <Button variant="outline" onClick={() => { setTranscript(''); setMicError(''); }}>
+              Clear
+            </Button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">Recognized Text</label>
+            <textarea value={transcript} readOnly className="w-full border rounded p-2 mt-1 h-28" />
+          </div>
+
+          {micError && <div className="text-sm text-red-600">{micError}</div>}
+
+          <div className="flex justify-end">
+            <Button onClick={() => { stopRecognition(); if (transcript) applyTranscriptToTarget(transcript); setShowMicModal(false); }} variant="success">Done</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Prescription Preview Modal */}
       <PrescriptionPreviewModal
@@ -855,7 +1124,7 @@ const ConsultationForm = () => {
         patient={patient}
         formData={formData}
         doctorInfo={{
-          name: 'Dr. John Doe', // You can get this from context or props
+          name: 'Dr. John Doe',
           specialization: 'General Physician',
           phone: '+1 234 567 8900',
           email: 'doctor@example.com',
@@ -864,7 +1133,7 @@ const ConsultationForm = () => {
         customSections={customSections}
         onPrint={() => {
           const doctorInfo = {
-            name: 'Dr. John Doe', // You can get this from context or props
+            name: 'Dr. John Doe',
             specialization: 'General Physician',
             phone: '+1 234 567 8900',
             email: 'doctor@example.com',
