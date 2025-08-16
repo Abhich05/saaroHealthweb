@@ -519,6 +519,43 @@ const ConsultationForm = () => {
 
   const applyTranscriptToTarget = (text) => {
     if (!text) return;
+
+    // quick vitals auto-detection
+    const parseVitalsFromText = (input = '') => {
+      const t = (input || '').toLowerCase();
+      const out = {};
+      const bpMatch = t.match(/(\d{2,3})\s*(?:\/|over)\s*(\d{2,3})/);
+      if (bpMatch) out.bp = `${bpMatch[1]}/${bpMatch[2]}`;
+      const pulseMatch = t.match(/(?:pulse|hr|heart rate)\s*(?:is|:)?\s*(\d{2,3})/);
+      if (pulseMatch) out.pulse = pulseMatch[1];
+      const spo2Match = t.match(/(?:spo2|spo|oxygen(?: saturation)?)\s*(?:is|:)?\s*(\d{2,3})/);
+      if (spo2Match) out.spo2 = spo2Match[1];
+      const rbsMatch = t.match(/(?:rbs|blood sugar|sugar)\s*(?:is|:)?\s*(\d{2,3})/);
+      if (rbsMatch) out.rbs = rbsMatch[1];
+      const tempMatch = t.match(/(?:temp(?:erature)?|fever)\s*(?:is|:)?\s*([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:°?\s?(f|c))?/);
+      if (tempMatch) {
+        const val = tempMatch[1];
+        const unit = tempMatch[2] || 'f';
+        out.temperature = unit === 'c' ? `${val} °C` : `${val} °F`;
+      } else {
+        const tempShort = t.match(/([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:°\s*)?(f|c)\b/);
+        if (tempShort) out.temperature = `${tempShort[1]} ${tempShort[2].toUpperCase()}`;
+      }
+      const heightMatch = t.match(/(?:height)\s*(?:is|:)?\s*(\d{2,3})\s*(?:cm|centimeters)?/);
+      if (heightMatch) out.height = heightMatch[1];
+      const weightMatch = t.match(/(?:weight)\s*(?:is|:)?\s*(\d{1,3}(?:\.[0-9]+)?)\s*(?:kg|kilograms)?/);
+      if (weightMatch) out.weight = weightMatch[1];
+      return out;
+    };
+
+    const vitalsDetected = parseVitalsFromText(text);
+    console.debug('Voice: vitalsDetected=', vitalsDetected, 'selectedTarget=', selectedTarget);
+    if (Object.keys(vitalsDetected).length > 0) {
+      console.debug('Applying detected vitals to formData.vitals', vitalsDetected);
+      setFormData(prev => ({ ...prev, vitals: { ...prev.vitals, ...vitalsDetected } }));
+      return;
+    }
+
     setFormData(prev => {
       const next = { ...prev };
       switch (selectedTarget) {
@@ -1054,6 +1091,7 @@ const ConsultationForm = () => {
           <div>
             <label className="block text-sm font-medium">Target Field</label>
             <select value={selectedTarget} onChange={(e) => setSelectedTarget(e.target.value)} className="w-full border rounded p-2 mt-1">
+              <option value="auto">Auto-detect (vitals & keywords)</option>
               <optgroup label="Vitals">
                 <option value="vital_bp">Blood Pressure (mmHg)</option>
                 <option value="vital_pulse">Pulse Rate (bpm)</option>
