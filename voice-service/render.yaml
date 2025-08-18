@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: voice-service
+    env: python
+    build:
+      buildCommand: pip install -r requirements.txt
+      startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,https://saarohealth.vercel.app
+      - key: ASR_DEVICE
+        value: cpu
+      - key: ASR_COMPUTE_TYPE
+        value: int8
+      - key: ASR_MODEL
+        value: base
+    healthCheckPath: /health
+    plan: free
