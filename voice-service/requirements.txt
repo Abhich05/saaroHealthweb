@@ -14,3 +14,4 @@ python-dotenv==1.0.1
 # Optional ML for medical NER parsing (loaded lazily)
 torch==2.1.2; platform_system != 'Windows' or platform_machine == 'x86_64'
 transformers==4.38.2
+python-3.12.6
