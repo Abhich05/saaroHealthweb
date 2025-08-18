@@ -306,6 +306,38 @@ const ConsultationForm = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Load draft for this patient when patient or doctorId changes
+  useEffect(() => {
+    if (!patient?._id) return;
+    try {
+      const key = draftKeyFor(patient._id);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          setFormData(prev => ({ ...prev, ...parsed.formData }));
+          setCustomSections(parsed.customSections || []);
+          setSectionOrder(parsed.sectionOrder || sectionOrder);
+          toast.info('Loaded saved draft for this patient');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load draft', e);
+    }
+  }, [patient?._id, doctorId]);
+
+  // Autosave draft on formData/customSections/sectionOrder changes
+  useEffect(() => {
+    if (!patient?._id) return;
+    const key = draftKeyFor(patient._id);
+    const payload = { formData, customSections, sectionOrder };
+    try {
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch (e) {
+      console.error('Failed to save draft', e);
+    }
+  }, [formData, customSections, sectionOrder, patient?._id, doctorId]);
+
   const [isConfigMode, setIsConfigMode] = useState(false);
   const [sectionOrder, setSectionOrder] = useState(() => {
     const savedOrder = localStorage.getItem(STORAGE_KEY);
@@ -337,6 +369,8 @@ const ConsultationForm = () => {
   const [newSectionData, setNewSectionData] = useState({ heading: '', label: '', type: '', options: '' });
   const [customTemplateData, setCustomTemplateData] = useState({ name: '', description: '' });
   const [activeId, setActiveId] = useState(null);
+  // Draft persistence key util
+  const draftKeyFor = (patientId) => `consult-draft:${doctorId || 'anon'}:${patientId || id}`;
 
   useEffect(() => {
     const savedOrder = localStorage.getItem(STORAGE_KEY);
@@ -910,6 +944,10 @@ const ConsultationForm = () => {
         setPatient(res.data.patient);
         
         toast.success('Consultation saved to past visits and finalized successfully!');
+        try {
+          const key = draftKeyFor(patient._id);
+          localStorage.removeItem(key);
+        } catch (e) { console.error('failed to clear draft', e); }
       }
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to save consultation.');
@@ -988,6 +1026,19 @@ const ConsultationForm = () => {
                   >
                     <FaMicrophone size={18} />
                   </Button>
+                  <Button onClick={() => {
+                    if (!patient?._id) return toast.error('No patient selected');
+                    const key = draftKeyFor(patient._id);
+                    localStorage.setItem(key, JSON.stringify({ formData, customSections, sectionOrder }));
+                    toast.success('Draft saved locally');
+                  }} variant="outline">Save Draft</Button>
+
+                  <Button onClick={() => {
+                    if (!patient?._id) return toast.error('No patient selected');
+                    const key = draftKeyFor(patient._id);
+                    localStorage.removeItem(key);
+                    toast.success('Draft cleared');
+                  }} variant="outline">Clear Draft</Button>
                 </div>
               </div>
               {/* Patient Details Card */}

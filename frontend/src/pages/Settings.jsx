@@ -45,6 +45,19 @@ const Settings = () => {
     const [specialization, setSpecialization] = useState('');
     const [education, setEducation] = useState('');
     const [bio, setBio] = useState('');
+    // OPD locations state (realtime editable)
+    const [opdLocations, setOpdLocations] = useState([{
+        id: crypto.randomUUID(),
+        clinicName: '',
+        city: '',
+        address: '',
+        days: { Mon: false, Tue: false, Wed: false, Thu: false, Fri: false, Sat: false, Sun: false },
+        startTime: '09:00',
+        endTime: '17:00',
+        slotMins: 10,
+        active: true,
+        mapLocation: null // reserved for Google Maps coords/address
+    }]);
 
     // Password change state
     const [currentPassword, setCurrentPassword] = useState('');
@@ -194,6 +207,10 @@ const Settings = () => {
                     setAvatarPreview(profileData.avatar);
                     setAvatarFileName(profileData.avatar.split('/').pop() || 'profile.jpg');
                 }
+                // load OPD locations if available
+                if (profileData.opdLocations && Array.isArray(profileData.opdLocations) && profileData.opdLocations.length > 0) {
+                    setOpdLocations(profileData.opdLocations.map(loc => ({ ...loc, id: loc.id || crypto.randomUUID() })));
+                }
                 
             } catch (error) {
                 console.error('Error fetching profile:', error);
@@ -234,6 +251,7 @@ const Settings = () => {
                 specialization: specialization.trim(),
                 education: education.trim(),
                 bio: bio.trim(),
+                opdLocations: opdLocations,
             };
             
             // Add avatar if changed
@@ -475,52 +493,93 @@ const Settings = () => {
                                         OPD & Appointment Timing Management
                                     </h2>
 
-                                    <div className="flex flex-col md:flex-row justify-around  gap-4">
-                                        {/* Left column */}
-                                        <div className="flex-1 space-y-4 text-left">
-                                            <button className="bg-[#ede9fe] font-semibold px-5 py-2 rounded-full text-black">
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-lg font-semibold">OPD Locations</h3>
+                                            <button
+                                                onClick={() => setOpdLocations(prev => [...prev, {
+                                                    id: crypto.randomUUID(), clinicName: '', city: '', address: '', days: { Mon: false, Tue: false, Wed: false, Thu: false, Fri: false, Sat: false, Sun: false }, startTime: '09:00', endTime: '17:00', slotMins: 10, active: true, mapLocation: null
+                                                }])}
+                                                className="bg-[#ede9fe] font-semibold px-5 py-2 rounded-full text-black"
+                                            >
                                                 Add OPD Location
                                             </button>
-
-                                            <div className="flex flex-wrap justify-between items-start gap-6 w-full">
-                                                <div className="flex-1 min-w-[200px]">
-                                                    <h3 className="font-semibold text-lg text-gray-800">Clinic Name</h3>
-                                                    <p className="text-[#66578f] text-400 text-sm">City, Full Address</p>
-                                                </div>
-
-                                                <div className="flex-shrink-0 w-full max-w-md">
-                                                    <img
-                                                        src="/building.png"
-                                                        alt="Clinic"
-                                                        className="rounded-xl object-cover w-[320px] h-[171px]"
-                                                    />
-                                                </div>
-                                            </div>
-
-
-                                            <div className="flex flex-wrap gap-2">
-                                                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
-                                                    <span key={day} className="px-4 py-2 bg-[#EBE8F2] rounded-full text-sm">{day}</span>
-                                                ))}
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-8 w-1/2">
-                                                <div className="space-y-1">
-                                                    <p className="text-sm text-[#66578f] text-400">Start Time</p>
-                                                    <p className="text-[#120F1A] text-400 font-small">9:00 AM</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-sm text-[#66578f] text-400">End Time</p>
-                                                    <p className="text-[#120F1A] text-400 font-small">5:00 PM</p>
-                                                </div>
-                                                <div className="space-y-1 col-span-2">
-                                                    <p className="text-sm text-[#66578f] text-400">Time Slot</p>
-                                                    <p className="text-[#120F1A] text-400 font-small">10 Mins.</p>
-                                                </div>
-                                            </div>
                                         </div>
 
+                                        {opdLocations.map((loc, idx) => (
+                                            <div key={loc.id} className="p-4 border rounded-lg bg-white">
+                                                <div className="flex justify-between items-start gap-4">
+                                                    <div className="flex-1">
+                                                        <label className="block text-sm font-medium">Clinic Name</label>
+                                                        <input value={loc.clinicName} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, clinicName: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
 
+                                                        <label className="block text-sm font-medium mt-3">City</label>
+                                                        <input value={loc.city} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, city: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
+
+                                                        <label className="block text-sm font-medium mt-3">Full Address</label>
+                                                        <input value={loc.address} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, address: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
+
+                                                        <div className="mt-3">
+                                                            <label className="block text-sm font-medium">Days</label>
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                {Object.keys(loc.days).map(day => (
+                                                                    <label key={day} className={`px-3 py-1 rounded-full cursor-pointer ${loc.days[day] ? 'bg-[#5e3bea] text-white' : 'bg-[#EBE8F2]'}`}>
+                                                                        <input type="checkbox" checked={loc.days[day]} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, days: { ...p.days, [day]: e.target.checked } } : p))} className="mr-2" />
+                                                                        {day}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="w-64">
+                                                        <label className="block text-sm font-medium">Start Time</label>
+                                                        <input type="time" value={loc.startTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, startTime: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
+
+                                                        <label className="block text-sm font-medium mt-3">End Time</label>
+                                                        <input type="time" value={loc.endTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, endTime: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
+
+                                                        <label className="block text-sm font-medium mt-3">Time Slot (mins)</label>
+                                                        <input type="number" min={1} value={loc.slotMins} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, slotMins: Number(e.target.value) } : p))} className="w-full border rounded p-2 mt-1" />
+
+                                                        <div className="mt-3 flex items-center justify-between">
+                                                            <label className="text-sm">Active</label>
+                                                            <input type="checkbox" checked={loc.active} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, active: e.target.checked } : p))} />
+                                                        </div>
+
+                                                        <div className="mt-3 flex gap-2">
+                                                            <button onClick={() => setOpdLocations(prev => prev.filter(p => p.id !== loc.id))} className="px-3 py-1 bg-red-500 text-white rounded">Remove</button>
+                                                            <button onClick={() => {
+                                                                // placeholder for picking map location
+                                                                const fakeCoord = { lat: 0, lng: 0 };
+                                                                setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: fakeCoord } : p));
+                                                            }} className="px-3 py-1 bg-gray-200 rounded">Pick on Map</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        <div className="flex gap-3 mt-4">
+                                            <button onClick={async () => {
+                                                // Save OPD locations to profile (doctor)
+                                                try {
+                                                    const doctorId = localStorage.getItem('doctorId');
+                                                    await axiosInstance.put(`/doctor/${doctorId}/opd-locations`, { opdLocations });
+                                                    toast.success('OPD locations saved');
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    toast.error('Failed to save OPD locations');
+                                                }
+                                            }} className="px-4 py-2 bg-purple-600 text-white rounded">Save OPD Locations</button>
+
+                                            <button onClick={() => {
+                                                // reset to initial single blank
+                                                setOpdLocations([{
+                                                    id: crypto.randomUUID(), clinicName: '', city: '', address: '', days: { Mon: false, Tue: false, Wed: false, Thu: false, Fri: false, Sat: false, Sun: false }, startTime: '09:00', endTime: '17:00', slotMins: 10, active: true, mapLocation: null
+                                                }]);
+                                            }} className="px-4 py-2 bg-gray-200 rounded">Reset</button>
+                                        </div>
                                     </div>
 
                                     {/* Toggle */}

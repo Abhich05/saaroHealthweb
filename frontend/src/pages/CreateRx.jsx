@@ -10,6 +10,8 @@ import ModalToast from "../components/ui/ModalToast";
 import Pagination from "../components/ui/Pagination";
 import { DoctorIdContext } from "../App";
 import axiosInstance from "../api/axiosInstance";
+import VoiceRxModal from "../components/ui/VoiceRxModal";
+import { FiMic } from "react-icons/fi";
 
 const generateUID = () => Math.floor(10000 + Math.random() * 90000).toString();
 
@@ -36,12 +38,16 @@ const CreateRx = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [existingPatientModal, setExistingPatientModal] = useState(false);
   const [existingPatient, setExistingPatient] = useState(null);
   const [modalErrors, setModalErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalToast, setModalToast] = useState(null);
+  // Selected patient for VoiceRx storage linkage
+  const [selectedPatientId, setSelectedPatientId] = useState(null);
+  const [selectedPatientName, setSelectedPatientName] = useState("");
 
   // Pagination
   const [pagination, setPagination] = useState({
@@ -317,8 +323,20 @@ const CreateRx = () => {
           <div className="max-w-[90%] mx-auto py-8 space-y-6">
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl leading-10 font-semibold">Create Rx</h1>
-              <div className="flex gap-2">
-                <Button onClick={handleRegisterPatient}>Register Patient</Button>
+              <div className="flex flex-col items-end">
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setIsVoiceModalOpen(true)} className="flex items-center gap-2">
+                    <FiMic /> Voice Rx
+                  </Button>
+                  <Button onClick={handleRegisterPatient}>Register Patient</Button>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {selectedPatientId ? (
+                    <span>Selected for VoiceRx: <span className="font-medium">{selectedPatientName}</span></span>
+                  ) : (
+                    <span>Select a patient in the table to link VoiceRx storage</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -364,11 +382,21 @@ const CreateRx = () => {
 
                 if (accessor === "action") {
                   return (
-                    <Link to={`/${row.uid}/consult`}>
-                      <span className={`text-sm px-3 py-1 text-[#69598C] text-700 hover:underline cursor-pointer`}>
-                        Consult
-                      </span>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/${row.uid}/consult`}>
+                        <span className={`text-sm px-3 py-1 text-[#69598C] text-700 hover:underline cursor-pointer`}>
+                          Consult
+                        </span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedPatientId(row._id); setSelectedPatientName(row.name); }}
+                        className="text-sm px-3 py-1 text-blue-700 hover:underline cursor-pointer"
+                        title="Link this patient to VoiceRx storage"
+                      >
+                        Use for VoiceRx
+                      </button>
+                    </div>
                   );
                 }
 
@@ -724,6 +752,13 @@ const CreateRx = () => {
             </div>
           </div>
         </Modal>
+        {/* Voice Rx Modal */}
+        <VoiceRxModal
+          isOpen={isVoiceModalOpen}
+          onClose={() => setIsVoiceModalOpen(false)}
+          doctorId={doctorId}
+          patientId={selectedPatientId}
+        />
       </div>
     </div>
   );

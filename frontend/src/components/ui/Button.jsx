@@ -1,16 +1,16 @@
-import React from "react";
+import React, { forwardRef } from "react";
 
-const Button = ({ 
-  children, 
-  className = "", 
-  onClick, 
-  type = "button", 
+const Button = forwardRef(({
+  children,
+  className = "",
+  onClick,
+  type = "button",
   variant = "primary",
   size = "md",
   disabled = false,
   loading = false,
-  ...props 
-}) => {
+  ...props
+}, ref) => {
   const getVariantClasses = () => {
     switch (variant) {
       case 'secondary':
@@ -46,6 +46,7 @@ const Button = ({
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
+      ref={ref}
       className={`
         ${getVariantClasses()}
         ${getSizeClasses()}
@@ -67,6 +68,6 @@ const Button = ({
       )}
     </button>
   );
-};
+});
 
 export default Button;
