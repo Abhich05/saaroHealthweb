@@ -12,5 +12,5 @@ pymongo[srv]==4.6.2
 cryptography==42.0.5
 python-dotenv==1.0.1
 # Optional ML for medical NER parsing (loaded lazily)
-torch==2.7.0; platform_system != 'Windows' or platform_machine == 'x86_64'
+torch==2.1.2; platform_system != 'Windows' or platform_machine == 'x86_64'
 transformers==4.38.2
