@@ -49,7 +49,7 @@ const headerPatternsDefault = [
   },
 ];
 
-const VoiceRxModal = ({ isOpen, onClose, doctorId, patientId = null }) => {
+const VoiceRxModal = ({ isOpen, onClose, doctorId, patientId = null, onApply }) => {
   const recognitionRef = useRef(null);
   const isRecordingRef = useRef(false);
   const finalTranscriptRef = useRef("");
@@ -354,6 +354,22 @@ const VoiceRxModal = ({ isOpen, onClose, doctorId, patientId = null }) => {
     setSvcError("");
   };
 
+  const handleApply = () => {
+    try {
+      if (typeof onApply === 'function') {
+        onApply({
+          transcript: finalTranscript || "",
+          sections: { ...sections },
+          svcResult: svcResult || null,
+        });
+      }
+      onClose?.();
+    } catch (e) {
+      console.error('Apply error', e);
+      setToast({ message: `Failed to apply: ${e.message || e}`, type: 'error', duration: 3000 });
+    }
+  };
+
   const exportJSON = () => {
     const exportData = {
       timestamp: new Date().toISOString(),
@@ -471,6 +487,9 @@ const VoiceRxModal = ({ isOpen, onClose, doctorId, patientId = null }) => {
               </label>
               <Button onClick={processWithService} disabled={!audioBlob || svcLoading} className="flex items-center gap-2">
                 {svcLoading ? "Processing..." : "Process with AI"}
+              </Button>
+              <Button onClick={handleApply} variant="success" className="flex items-center gap-2">
+                Apply to Form
               </Button>
             </div>
           </div>

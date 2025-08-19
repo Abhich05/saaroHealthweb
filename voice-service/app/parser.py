@@ -28,9 +28,9 @@ def parse_sections(transcript: str) -> Dict[str, str]:
     # Split by cues while preserving order
     lines = [l.strip() for l in re.split(r"[\n\r]", transcript) if l.strip()] or [transcript]
     current = "Notes"
-    sections: Dict[str, List[str]] = {k: [] for k, _ in SECTION_PATTERNS}
+    sections: Dict[str, List[str]] = {k: list() for k, _ in SECTION_PATTERNS}
     if "Notes" not in sections:
-        sections["Notes"] = []
+        sections["Notes"] = list()
     for line in lines:
         matched = False
         for name, pat in SECTION_PATTERNS:
@@ -68,7 +68,7 @@ def extract_fields(sections: Dict[str, str]) -> Dict[str, Any]:
         fields["diagnosis"] = sections["Diagnosis"]
 
     # Medications
-    meds: List[dict] = []
+    meds: List[dict] = list()
     med_text = sections.get("Medication", "")
     if med_text:
         for part in re.split(r"[\n\.;]", med_text):
@@ -120,7 +120,7 @@ def score_fields(fields: Dict[str, Any], segments: List[dict]) -> Tuple[float, D
 
 
 def build_clarifications(fields: Dict[str, Any], field_scores: Dict[str, float]) -> List[dict]:
-    clarifications: List[dict] = []
+    clarifications: List[dict] = list()
     def add(field: str, reason: str, suggestion: str | None = None):
         clarifications.append({"field": field, "reason": reason, "suggestion": suggestion, "confidence": field_scores.get(field, 0.6)})
 

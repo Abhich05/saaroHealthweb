@@ -30,7 +30,7 @@ class ParsedPrescription(BaseModel):
     segments: List[Segment]
     fields: Dict[str, ParsedField]
     sections: Dict[str, str]
-    clarifications: List[Clarification] = []
+    clarifications: List[Clarification] = Field(default_factory=list)
 
 
 class StoreResult(BaseModel):

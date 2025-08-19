@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  voice-service:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
+    # Uncomment and add your environment variables below
+    # environment:
+    #   - YOUR_ENV_VAR=value

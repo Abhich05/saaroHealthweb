@@ -25,8 +25,8 @@ class ASR:
                 language="en",
                 without_timestamps=False,
             )
-        text = []
-        out_segments: List[dict] = []
+        text = list()
+        out_segments: List[dict] = list()
         for seg in segments:
             text.append(seg.text)
             out_segments.append({

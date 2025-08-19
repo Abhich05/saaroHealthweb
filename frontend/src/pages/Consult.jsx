@@ -4,7 +4,7 @@ import Sidebar from '../components/layout/SideBar';
 import Header from '../components/layout/Header';
 import { DndContext, closestCenter, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { FiSettings, FiPlus, FiSave, FiFile, FiThermometer } from 'react-icons/fi';
+import { FiSettings, FiPlus, FiSave, FiFile, FiThermometer, FiMic } from 'react-icons/fi';
 import { FaMicrophone, FaHeartbeat, FaBaby } from "react-icons/fa";
 import { MdOutlineMonitorHeart } from 'react-icons/md';
 import PastVisitsSection from '../components/consultation/PastVisitsSection';
@@ -18,6 +18,7 @@ import PatientDetailsCard from '../components/ui/PatientDetailsCard';
 import TemplateModal from '../components/ui/TemplateModal';
 import AddSectionModal from '../components/ui/AddSectionModal';
 import PrescriptionPreviewModal from '../components/ui/PrescriptionPreviewModal';
+import VoiceRxModal from '../components/ui/VoiceRxModal';
 import { printPrescription } from '../utils/printPrescription';
 import {
   ComplaintsSection,
@@ -306,37 +307,6 @@ const ConsultationForm = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Load draft for this patient when patient or doctorId changes
-  useEffect(() => {
-    if (!patient?._id) return;
-    try {
-      const key = draftKeyFor(patient._id);
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') {
-          setFormData(prev => ({ ...prev, ...parsed.formData }));
-          setCustomSections(parsed.customSections || []);
-          setSectionOrder(parsed.sectionOrder || sectionOrder);
-          toast.info('Loaded saved draft for this patient');
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load draft', e);
-    }
-  }, [patient?._id, doctorId]);
-
-  // Autosave draft on formData/customSections/sectionOrder changes
-  useEffect(() => {
-    if (!patient?._id) return;
-    const key = draftKeyFor(patient._id);
-    const payload = { formData, customSections, sectionOrder };
-    try {
-      localStorage.setItem(key, JSON.stringify(payload));
-    } catch (e) {
-      console.error('Failed to save draft', e);
-    }
-  }, [formData, customSections, sectionOrder, patient?._id, doctorId]);
 
   const [isConfigMode, setIsConfigMode] = useState(false);
   const [sectionOrder, setSectionOrder] = useState(() => {
@@ -360,6 +330,7 @@ const ConsultationForm = () => {
   const [showNewSectionForm, setShowNewSectionForm] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showMicModal, setShowMicModal] = useState(false);
+  const [showVoiceRx, setShowVoiceRx] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState('');
   const [selectedTarget, setSelectedTarget] = useState('complaints');
@@ -786,6 +757,38 @@ const ConsultationForm = () => {
     followUp: ['', '']
   });
 
+  // Load draft for this patient when patient or doctorId changes
+  useEffect(() => {
+    if (!patient?._id) return;
+    try {
+      const key = draftKeyFor(patient._id);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          setFormData(prev => ({ ...prev, ...parsed.formData }));
+          setCustomSections(parsed.customSections || []);
+          setSectionOrder(parsed.sectionOrder || sectionOrder);
+          toast.info('Loaded saved draft for this patient');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load draft', e);
+    }
+  }, [patient?._id, doctorId]);
+
+  // Autosave draft on formData/customSections/sectionOrder changes
+  useEffect(() => {
+    if (!patient?._id) return;
+    const key = draftKeyFor(patient._id);
+    const payload = { formData, customSections, sectionOrder };
+    try {
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch (e) {
+      console.error('Failed to save draft', e);
+    }
+  }, [formData, customSections, sectionOrder, patient?._id, doctorId]);
+
   const sections = useMemo(() => {
     const baseSections = {
       complaints: <ComplaintsSection isConfigMode={isConfigMode} formData={formData} setFormData={setFormData} enabled={!isConfigMode} />,
@@ -956,6 +959,104 @@ const ConsultationForm = () => {
     }
   };
 
+  const handleVoiceRxApply = ({ transcript = '', sections = {}, svcResult = null }) => {
+    try {
+      setFormData(prev => {
+        const next = { ...prev };
+        const splitItems = (txt = '') => (txt || '')
+          .split(/[\n;]|(?<=[.!?])\s+/)
+          .map(s => s.trim())
+          .filter(Boolean);
+
+        // Vitals from transcript if present
+        const parseVitalsFromText = (input = '') => {
+          const t = (input || '').toLowerCase();
+          const out = {};
+          const bpMatch = t.match(/(\d{2,3})\s*(?:\/|over)\s*(\d{2,3})/);
+          if (bpMatch) out.bp = `${bpMatch[1]}/${bpMatch[2]}`;
+          const pulseMatch = t.match(/(?:pulse|hr|heart rate)\s*(?:is|:)?\s*(\d{2,3})/);
+          if (pulseMatch) out.pulse = pulseMatch[1];
+          const spo2Match = t.match(/(?:spo2|spo|oxygen(?: saturation)?)\s*(?:is|:)?\s*(\d{2,3})/);
+          if (spo2Match) out.spo2 = spo2Match[1];
+          const rbsMatch = t.match(/(?:rbs|blood sugar|sugar)\s*(?:is|:)?\s*(\d{2,3})/);
+          if (rbsMatch) out.rbs = rbsMatch[1];
+          const tempMatch = t.match(/(?:temp(?:erature)?|fever)\s*(?:is|:)?\s*([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:°?\s?(f|c))?/);
+          if (tempMatch) {
+            const val = tempMatch[1];
+            const unit = tempMatch[2] || 'f';
+            out.temperature = unit === 'c' ? `${val} °C` : `${val} °F`;
+          } else {
+            const tempShort = t.match(/([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:°\s*)?(f|c)\b/);
+            if (tempShort) out.temperature = `${tempShort[1]} ${tempShort[2].toUpperCase()}`;
+          }
+          const heightMatch = t.match(/(?:height)\s*(?:is|:)?\s*(\d{2,3})\s*(?:cm|centimeters)?/);
+          if (heightMatch) out.height = heightMatch[1];
+          const weightMatch = t.match(/(?:weight)\s*(?:is|:)?\s*(\d{1,3}(?:\.[0-9]+)?)\s*(?:kg|kilograms)?/);
+          if (weightMatch) out.weight = weightMatch[1];
+          return out;
+        };
+
+        // Apply vitals from entire transcript
+        const vitalsDetected = parseVitalsFromText(transcript);
+        if (Object.keys(vitalsDetected).length > 0) {
+          next.vitals = { ...next.vitals, ...vitalsDetected };
+        }
+
+        // Map known sections
+        if (sections['Symptoms']) {
+          const items = splitItems(sections['Symptoms']);
+          if (items.length) {
+            next.complaints = items.map(text => ({ id: crypto.randomUUID(), text }));
+          }
+        }
+
+        if (sections['Diagnosis']) {
+          const items = splitItems(sections['Diagnosis']);
+          if (items.length) {
+            next.diagnosis = {
+              ...next.diagnosis,
+              provisional: items.map(value => ({ id: crypto.randomUUID(), value })),
+            };
+          }
+        }
+
+        if (sections['Medication']) {
+          const medText = (sections['Medication'] || '').trim();
+          if (medText) {
+            if (!next.medication || next.medication.length === 0) {
+              next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: '', duration: '', notes: medText }];
+            } else {
+              const existing = next.medication[0].notes || '';
+              next.medication[0].notes = existing ? `${existing} ${medText}` : medText;
+            }
+          }
+        }
+
+        if (sections['Instructions']) {
+          const t = sections['Instructions'].trim();
+          if (t) next.advice = (next.advice ? next.advice + ' ' : '') + t;
+        }
+
+        if (sections['Follow-Up']) {
+          const t = sections['Follow-Up'].trim();
+          if (t) next.followUp = [t, ...(next.followUp?.slice(1) || [])];
+        }
+
+        if (sections['Notes']) {
+          const t = sections['Notes'].trim();
+          if (t) next.advice = (next.advice ? next.advice + ' ' : '') + t;
+        }
+
+        return next;
+      });
+      toast.success('Applied Voice Rx to the form');
+      setShowVoiceRx(false);
+    } catch (e) {
+      console.error('VoiceRx apply error', e);
+      toast.error('Failed to apply Voice Rx');
+    }
+  };
+
   const handleSendWhatsApp = async () => {
     if (!doctorId || !patient?._id) {
       toast.error('Doctor or patient not found.');
@@ -1025,6 +1126,14 @@ const ConsultationForm = () => {
                     onClick={() => setShowMicModal(true)}
                   >
                     <FaMicrophone size={18} />
+                  </Button>
+                  <Button 
+                    onClick={() => setShowVoiceRx(true)} 
+                    variant="secondary"
+                    className="flex items-center"
+                  >
+                    <FiMic className="mr-2" />
+                    Voice Rx
                   </Button>
                   <Button onClick={() => {
                     if (!patient?._id) return toast.error('No patient selected');
@@ -1126,6 +1235,15 @@ const ConsultationForm = () => {
         showCustomForm={showCustomTemplateForm}
         setShowCustomForm={setShowCustomTemplateForm}
         inbuiltTemplates={INBUILT_TEMPLATES}
+      />
+
+      {/* Voice Rx Modal */}
+      <VoiceRxModal
+        isOpen={showVoiceRx}
+        onClose={() => setShowVoiceRx(false)}
+        doctorId={doctorId}
+        patientId={patient?._id || null}
+        onApply={handleVoiceRxApply}
       />
 
       {/* Microphone / Speech Recognition Modal */}
