@@ -1,90 +1,122 @@
 import axios from 'axios';
 import { getDoctorToken, getUserToken, clearAllAuth } from '../utils/auth';
 
-// axiosInstance is configured to use the backend API base URL from .env
-// Make sure VITE_API_BASE_URL is set correctly in your .env file
+// Configure base URL with environment variable or fallback
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.onrender.com/api';
 
+// Create axios instance with optimized defaults
 const axiosInstance = axios.create({
-  baseURL: baseURL,
-  withCredentials: true, // Enable cookies for cross-origin requests
+  baseURL,
+  withCredentials: true,
+  timeout: 10000, // 10 second timeout
+  headers: {
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  }
 });
+
+// Request cache
+const requestCache = new Map();
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
 // Add JWT to requests automatically
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Debug logging
-    console.log('=== AXIOS INTERCEPTOR DEBUG ===');
-    console.log('Request URL:', config.url);
-    console.log('Request method:', config.method);
-    
-    // Check if it's a user login or doctor login
-    const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
-    console.log('Is user login:', isUserLogin);
-    
-    if (isUserLogin) {
-      // Use user JWT token
-      const token = getUserToken();
-      console.log('User JWT token:', token ? 'Present' : 'Missing');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log('Added user JWT to Authorization header');
-      }
-    } else {
-      // Use doctor JWT token
-      const token = getDoctorToken();
-      console.log('Doctor JWT token:', token ? 'Present' : 'Missing');
-      
-      // Debug: Check all cookies
-      console.log('All cookies:', document.cookie);
-      
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log('Added doctor JWT to Authorization header');
-      } else {
-        console.log('No doctor JWT token found - checking localStorage');
-        const localStorageToken = localStorage.getItem('jwt_token');
-        console.log('localStorage jwt_token:', localStorageToken ? 'Present' : 'Missing');
-      }
+    // Skip cache for non-GET requests
+    if (config.method !== 'get') {
+      return addAuthHeader(config);
     }
+
+    // Check cache first for GET requests
+    const cacheKey = `${config.url}:${JSON.stringify(config.params)}`;
+    const cached = requestCache.get(cacheKey);
     
-    console.log('Final headers:', config.headers);
-    return config;
+    if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY)) {
+      // Return cached response
+      return {
+        ...cached.response,
+        headers: {
+          ...cached.response.headers,
+          'x-cache': 'HIT',
+        },
+      };
+    }
+
+    return addAuthHeader(config);
   },
   (error) => Promise.reject(error)
 );
 
-// Handle global errors (e.g., token expiry)
+// Helper function to add auth header
+const addAuthHeader = (config) => {
+  const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+  const token = isUserLogin ? getUserToken() : getDoctorToken();
+  
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
+  return config;
+};
+    
+// Response interceptor for caching successful responses
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.method === 'get' && response.status === 200) {
+      const cacheKey = `${response.config.url}:${JSON.stringify(response.config.params)}`;
+      requestCache.set(cacheKey, {
+        response,
+        timestamp: Date.now()
+      });
+    }
+    return response;
+  },
   (error) => {
-    if (error.response && error.response.status === 401) {
-      console.log('=== 401 UNAUTHORIZED ERROR ===');
-      console.log('Error response:', error.response.data);
-      
-      // Check if this is a token authentication issue
-      const errorMessage = error.response.data?.error || '';
-      const isTokenError = errorMessage.includes('token') || 
-                          errorMessage.includes('unauthorized') ||
-                          errorMessage.includes('Access token required') ||
-                          errorMessage.includes('Token expired');
+    if (error.response?.status === 401) {
+      // Handle token expiration
+      const errorMessage = error.response.data?.error?.toLowerCase() || '';
+      const isTokenError = ['token', 'unauthorized', 'access token required', 'token expired']
+        .some(term => errorMessage.includes(term));
       
       if (isTokenError) {
-        console.log('Token authentication error detected, clearing auth data');
-        
-        // Clear all authentication data
         clearAllAuth();
-        
-        // Redirect to appropriate login page
         const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
-        const redirectPath = isUserLogin ? '/user-login' : '/login';
-        
-        console.log('Redirecting to:', redirectPath);
-        window.location.href = redirectPath;
+        window.location.href = isUserLogin ? '/user-login' : '/login';
       }
     }
     return Promise.reject(error);
   }
 );
+
+// Add retry mechanism for failed requests
+const MAX_RETRIES = 2;
+const retryRequest = (error) => {
+  const config = error.config;
+  
+  if (!config || !config.retry) {
+    return Promise.reject(error);
+  }
+  
+  config.retryCount = config.retryCount || 0;
+  
+  if (config.retryCount >= MAX_RETRIES) {
+    return Promise.reject(error);
+  }
+  
+  config.retryCount += 1;
+  
+  // Exponential backoff
+  const backoff = new Promise((resolve) => {
+    setTimeout(() => {
+      resolve();
+    }, config.retryCount * 1000);
+  });
+  
+  return backoff.then(() => axiosInstance(config));
+};
+
+// Add retry interceptor
+axiosInstance.interceptors.response.use(null, retryRequest);
 
 export default axiosInstance;

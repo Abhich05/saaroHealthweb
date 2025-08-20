@@ -701,7 +701,7 @@ const ConsultationForm = () => {
      const updatedValues = [...field.values];
      updatedValues[inputIdx].value = newValue;
 
-     // ✅ Only for input type, allow auto-add new row
+     // Only for input type, allow auto-add new row
      if (field.type === 'input' && inputIdx === updatedValues.length - 1 && newValue.trim()) {
        updatedValues.push({ id: crypto.randomUUID(), value: '' });
      }
@@ -1128,9 +1128,9 @@ const ConsultationForm = () => {
                     <FaMicrophone size={18} />
                   </Button>
                   <Button 
-                    onClick={() => setShowVoiceRx(true)} 
-                    variant="secondary"
-                    className="flex items-center"
+                    onClick={() => setShowVoiceRx(true)}
+                    variant="primary"
+                    className="flex items-center bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <FiMic className="mr-2" />
                     Voice Rx
@@ -1241,9 +1241,9 @@ const ConsultationForm = () => {
       <VoiceRxModal
         isOpen={showVoiceRx}
         onClose={() => setShowVoiceRx(false)}
-        doctorId={doctorId}
-        patientId={patient?._id || null}
         onApply={handleVoiceRxApply}
+        doctorId={doctorId}
+        patientId={patient?._id}
       />
 
       {/* Microphone / Speech Recognition Modal */}

@@ -1,10 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header2 from "../components/layout/Header2";
-import LandingSections from "../components/landing/LandingSections";
 import Button from "../components/ui/Button";
-import axiosInstance from "../api/axiosInstance";
+import axios from "axios";
 import { setDoctorToken } from "../utils/auth";
+
+// Create a dedicated axios instance for login to avoid interceptors
+const loginAxios = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.onrender.com/api',
+  timeout: 10000,
+});
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -15,77 +20,103 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
-    let newErrors = {};
-    setSubmitError("");
+  // Preload assets on component mount
+  useEffect(() => {
+    // Preload the dashboard route
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = '/';
+    document.head.appendChild(link);
+    
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
+
+  const validateForm = useCallback(() => {
+    const newErrors = {};
+    
     if (!email) {
       newErrors.email = "Email is required.";
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        newErrors.email = "Please enter a valid email.";
-      }
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Please enter a valid email.";
     }
+    
     if (!password) {
       newErrors.password = "Password is required.";
     } else if (password.length < 8) {
       newErrors.password = "Password must be at least 8 characters.";
     }
+    
+    return newErrors;
+  }, [email, password]);
+
+  const handleLogin = useCallback(async () => {
+    const newErrors = validateForm();
     setErrors(newErrors);
+    setSubmitError("");
 
-    if (Object.keys(newErrors).length === 0) {
-      setIsLoading(true);
-      try {
-        localStorage.removeItem("doctorName");
-        localStorage.removeItem("userName");
-        localStorage.removeItem("userRole");
-        localStorage.removeItem("userPermissions");
-        localStorage.removeItem("userId");
-        localStorage.removeItem("clinicName");
+    if (Object.keys(newErrors).length > 0) return;
 
-        const res = await axiosInstance.post("/doctor/access-token", {
-          email,
-          password,
-        });
+    setIsLoading(true);
+    
+    try {
+      // Clear previous session data
+      ['doctorName', 'userName', 'userRole', 'userPermissions', 'userId', 'clinicName']
+        .forEach(key => localStorage.removeItem(key));
 
-        if (res.data) {
-          const doctorId =
-            res.data.doctorId || (res.data.doctor && res.data.doctor.id);
-          if (doctorId) {
-            localStorage.setItem("doctorId", doctorId);
-            localStorage.setItem("isUserLogin", "false");
-
-            if (res.data.accessToken) {
-              setDoctorToken(res.data.accessToken);
-              console.log(
-                "JWT token stored using auth utility from response body"
-              );
-            }
-
-            const cookieToken = document.cookie
-              .split("; ")
-              .find((row) => row.startsWith("jwt_token="))
-              ?.split("=")[1];
-
-            if (cookieToken) {
-              console.log("JWT token also found in cookie from backend");
-            } else {
-              console.log("No JWT token found in cookie from backend");
-            }
-
-            console.log("doctorId set:", doctorId);
-            window.location.href = "/";
+      // Use the login-specific axios instance
+      const { data } = await loginAxios.post("/doctor/access-token", {
+        email,
+        password,
+      }, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        retry: true, // Enable retry for this request
+        'axios-retry': {
+          retries: 2,
+          retryDelay: (retryCount) => {
+            return retryCount * 1000; // 1s, 2s delay between retries
           }
         }
-      } catch (err) {
-        setSubmitError(
-          err.response?.data?.error || "Login failed. Please try again."
-        );
-      } finally {
-        setIsLoading(false);
+      });
+
+      if (data?.accessToken) {
+        const doctorId = data.doctorId || (data.doctor && data.doctor.id);
+        if (doctorId) {
+          // Batch localStorage operations
+          const storageUpdates = [
+            ['doctorId', doctorId],
+            ['isUserLogin', 'false']
+          ];
+          
+          storageUpdates.forEach(([key, value]) => 
+            localStorage.setItem(key, value)
+          );
+          
+          setDoctorToken(data.accessToken);
+          
+          // Use replace instead of href to prevent adding to history
+          window.location.replace('/');
+          return;
+        }
       }
+      
+      setSubmitError("Invalid response from server. Please try again.");
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || "Login failed. Please try again.";
+      setSubmitError(errorMessage);
+      
+      // Clear form on specific errors
+      if (errorMessage.toLowerCase().includes('invalid credentials')) {
+        setPassword('');
+      }
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [email, password, validateForm]);
 
   const handleForgotPasswordClick = () => {
     navigate("/forgot");
@@ -95,9 +126,25 @@ const LoginPage = () => {
     navigate("/user-login");
   };
 
+  // Debounce form submission
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return function(...args) {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(this, args), delay);
+    };
+  };
+
+  // Memoize the debounced login
+  const debouncedLogin = useCallback(
+    debounce(handleLogin, 300),
+    [handleLogin]
+  );
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      handleLogin();
+      e.preventDefault();
+      debouncedLogin();
     }
   };
 

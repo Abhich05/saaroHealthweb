@@ -1,8 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import Header2 from "../components/layout/Header2";
 import Button from "../components/ui/Button";
 import { useNavigate } from "react-router-dom";
-import axiosInstance from "../api/axiosInstance";
+import axios from "axios";
+
+// Create a dedicated axios instance for signup to avoid interceptors
+const signupAxios = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.onrender.com/api',
+  timeout: 10000,
+  headers: {
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+  }
+});
 
 const SignupStepsPage = () => {
   const navigate = useNavigate();
@@ -20,7 +30,8 @@ const SignupStepsPage = () => {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
 
-  const validateStep1 = () => {
+  // Memoize validation functions
+  const validateStep1 = useCallback(() => {
     const newErrors = {};
     const { fullName, email, mobile, password, confirmPassword } = formData;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -37,22 +48,43 @@ const SignupStepsPage = () => {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const validateStep2 = () => {
+  const validateStep2 = useCallback(() => {
     const newErrors = {};
     const { rmcNumber, address } = formData;
     if (!rmcNumber.trim()) newErrors.rmcNumber = "RMC Number is required.";
     if (!address.trim() || address.length < 5) newErrors.address = "At least 5 characters.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  }, [formData]);
+
+  // Debounce function
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return function(...args) {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(this, args), delay);
+    };
   };
 
-  const handleChange = (e) =>
-    setFormData((prev) => ({
+  // Memoized change handler with debouncing
+  const handleChange = useCallback(debounce((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value
     }));
+  }, 150), []);
+
+  // For immediate feedback on input
+  const handleInput = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleNext = () => {
     if (validateStep1()) {
@@ -66,25 +98,57 @@ const SignupStepsPage = () => {
     setErrors({});
   };
 
-  const handleSignUp = async () => {
-    if (validateStep2()) {
-      setSubmitError("");
-      try {
-        await axiosInstance.post("/doctor", {
-          name: formData.fullName,
-          email: formData.email,
-          phoneNumber: formData.mobile,
-          password: formData.password,
-          rmcNumber: formData.rmcNumber,
-          address: formData.address,
-          clinicName: formData.clinicName,
+  const handleSignUp = useCallback(async () => {
+    if (!validateStep2()) return;
+    
+    setSubmitError("");
+    const isMounted = true;
+    
+    try {
+      const response = await signupAxios.post("/doctor", {
+        name: formData.fullName,
+        email: formData.email,
+        phoneNumber: formData.mobile,
+        password: formData.password,
+        rmcNumber: formData.rmcNumber,
+        address: formData.address,
+        clinicName: formData.clinicName,
+      }, {
+        'axios-retry': {
+          retries: 2,
+          retryDelay: (retryCount) => retryCount * 1000
+        }
+      });
+      
+      if (isMounted) {
+        // Preload login page before navigation
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.href = '/login';
+        document.head.appendChild(link);
+        
+        // Navigate with state to prevent loading spinners
+        navigate("/login", { 
+          state: { 
+            fromSignup: true,
+            email: formData.email 
+          } 
         });
-        navigate("/login");
-      } catch (err) {
-        setSubmitError(err.response?.data?.error || "Failed to create account. Try again.");
+      }
+    } catch (err) {
+      if (isMounted) {
+        const errorMessage = err.response?.data?.error || "Failed to create account. Please try again.";
+        setSubmitError(errorMessage);
+        
+        // Auto-clear error after 5 seconds
+        const timer = setTimeout(() => {
+          if (isMounted) setSubmitError("");
+        }, 5000);
+        
+        return () => clearTimeout(timer);
       }
     }
-  };
+  }, [formData, navigate, validateStep2]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-orange-50 flex flex-col">
@@ -108,7 +172,16 @@ const SignupStepsPage = () => {
             <div className="space-y-4">
               {step === 1 && (
                 <>
-                  <InputField name="fullName" label="Full Name" placeholder="John Doe" value={formData.fullName} onChange={handleChange} error={errors.fullName} />
+                  <InputField
+                    label="Full Name"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    onInput={handleInput}
+                    error={errors.fullName}
+                    placeholder="Enter your full name"
+                    required
+                  />
                   <InputField name="email" label="Email" placeholder="you@example.com" value={formData.email} onChange={handleChange} error={errors.email} />
                   <InputField name="mobile" label="Mobile" placeholder="10-digit number" value={formData.mobile} onChange={handleChange} error={errors.mobile} />
                   <InputField type="password" name="password" label="Password" placeholder="••••••••" value={formData.password} onChange={handleChange} error={errors.password} />
