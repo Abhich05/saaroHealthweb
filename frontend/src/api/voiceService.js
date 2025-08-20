@@ -1,6 +1,6 @@
-// A lightweight client for the Python VoiceRx service
-// Configure base URL via VITE_VOICE_SERVICE_URL, defaults to localhost
-const VOICE_BASE_URL = import.meta.env.VITE_VOICE_SERVICE_URL || 'http://localhost:8090';
+// A lightweight client for the VoiceRx service
+// Configure base URL via VITE_VOICE_SERVICE_URL, defaults to backend API
+const VOICE_BASE_URL = import.meta.env.VITE_VOICE_SERVICE_URL || 'http://localhost:5000/api/voicerx';
 
 async function health() {
   const res = await fetch(`${VOICE_BASE_URL}/health`);

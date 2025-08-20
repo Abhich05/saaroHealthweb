@@ -5,12 +5,15 @@ from typing import Dict, List, Tuple, Any
 
 SECTION_PATTERNS = [
     ("Patient Information", re.compile(r"\b(patient|pt\.?|name|age|gender|male|female|dob|date of birth)\b", re.I)),
-    ("Symptoms", re.compile(r"\b(symptom[s]?|complaint[s]?|presenting|history of|h/o|since)\b", re.I)),
-    ("Diagnosis", re.compile(r"\b(diagnosis|dx|impression|assessment)\b", re.I)),
-    ("Medication", re.compile(r"\b(medication[s]?|drug[s]?|rx|prescribe|start|continue|tablet|capsule|syrup|mg|ml)\b", re.I)),
-    ("Instructions", re.compile(r"\b(instruction[s]?|advice|counsel|direction[s]?|recommend|avoid|take|with food)\b", re.I)),
-    ("Follow-Up", re.compile(r"\b(follow[- ]?up|review|recheck|return visit|come back|next appointment|see again)\b", re.I)),
-    ("Notes", re.compile(r"\b(note[s]?|remark[s]?|additional)\b", re.I)),
+    ("Symptoms", re.compile(r"\b(symptom[s]?|complaint[s]?|presenting|history of|h/o|since|chief|complaint)\b", re.I)),
+    ("Diagnosis", re.compile(r"\b(diagnosis|dx|impression|assessment|condition|ailment|disorder)\b", re.I)),
+    ("Medication", re.compile(r"\b(medication[s]?|drug[s]?|rx|prescribe|start|continue|tablet|capsule|syrup|drop|injection|mg|ml|microgram|gram)\b", re.I)),
+    ("Dosage", re.compile(r"\b(dosage|dose|strength|concentration)\b", re.I)),
+    ("Frequency", re.compile(r"\b(frequency|times|schedule|regimen)\b", re.I)),
+    ("Duration", re.compile(r"\b(duration|course|period|length|term)\b", re.I)),
+    ("Instructions", re.compile(r"\b(instruction[s]?|advice|counsel|direction[s]?|recommend|avoid|take|with food|before meal|after meal)\b", re.I)),
+    ("Follow-Up", re.compile(r"\b(follow[- ]?up|review|recheck|return visit|come back|next appointment|see again|appointment|visit)\b", re.I)),
+    ("Notes", re.compile(r"\b(note[s]?|remark[s]?|additional|observation)\b", re.I)),
 ]
 
 MEDICATION_LINE = re.compile(
@@ -67,7 +70,7 @@ def extract_fields(sections: Dict[str, str]) -> Dict[str, Any]:
     if sections.get("Diagnosis"):
         fields["diagnosis"] = sections["Diagnosis"]
 
-    # Medications
+    # Medications with enhanced parsing
     meds: List[dict] = list()
     med_text = sections.get("Medication", "")
     if med_text:
@@ -91,6 +94,14 @@ def extract_fields(sections: Dict[str, str]) -> Dict[str, Any]:
                 meds.append({"raw": chunk})
     if meds:
         fields["medications"] = meds
+
+    # Additional medical entities
+    if sections.get("Dosage"):
+        fields["dosage"] = sections["Dosage"]
+    if sections.get("Frequency"):
+        fields["frequency"] = sections["Frequency"]
+    if sections.get("Duration"):
+        fields["duration"] = sections["Duration"]
 
     # Instructions
     if sections.get("Instructions"):

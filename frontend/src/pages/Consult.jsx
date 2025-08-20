@@ -18,7 +18,7 @@ import PatientDetailsCard from '../components/ui/PatientDetailsCard';
 import TemplateModal from '../components/ui/TemplateModal';
 import AddSectionModal from '../components/ui/AddSectionModal';
 import PrescriptionPreviewModal from '../components/ui/PrescriptionPreviewModal';
-import VoiceRxModal from '../components/ui/VoiceRxModal';
+import EnhancedVoiceRxModal from '../components/ui/EnhancedVoiceRxModal';
 import { printPrescription } from '../utils/printPrescription';
 import {
   ComplaintsSection,
@@ -959,7 +959,7 @@ const ConsultationForm = () => {
     }
   };
 
-  const handleVoiceRxApply = ({ transcript = '', sections = {}, svcResult = null }) => {
+  const handleVoiceRxApply = ({ transcript = '', sections = {}, svcResult = null, realTime = false }) => {
     try {
       setFormData(prev => {
         const next = { ...prev };
@@ -1002,39 +1002,81 @@ const ConsultationForm = () => {
           next.vitals = { ...next.vitals, ...vitalsDetected };
         }
 
-        // Map known sections
+        // Map known sections - for real-time updates, append instead of replace
         if (sections['Symptoms']) {
           const items = splitItems(sections['Symptoms']);
           if (items.length) {
-            next.complaints = items.map(text => ({ id: crypto.randomUUID(), text }));
+            if (realTime) {
+              // Append new symptoms to existing ones
+              const newSymptoms = items.filter(text => 
+                !next.complaints.some(existing => existing.text === text)
+              );
+              next.complaints = [
+                ...next.complaints,
+                ...newSymptoms.map(text => ({ id: crypto.randomUUID(), text }))
+              ];
+            } else {
+              next.complaints = items.map(text => ({ id: crypto.randomUUID(), text }));
+            }
           }
         }
 
         if (sections['Diagnosis']) {
           const items = splitItems(sections['Diagnosis']);
           if (items.length) {
-            next.diagnosis = {
-              ...next.diagnosis,
-              provisional: items.map(value => ({ id: crypto.randomUUID(), value })),
-            };
+            if (realTime) {
+              const newDiagnoses = items.filter(value => 
+                !next.diagnosis.provisional.some(existing => existing.value === value)
+              );
+              next.diagnosis = {
+                ...next.diagnosis,
+                provisional: [
+                  ...next.diagnosis.provisional,
+                  ...newDiagnoses.map(value => ({ id: crypto.randomUUID(), value }))
+                ],
+              };
+            } else {
+              next.diagnosis = {
+                ...next.diagnosis,
+                provisional: items.map(value => ({ id: crypto.randomUUID(), value })),
+              };
+            }
           }
         }
 
         if (sections['Medication']) {
           const medText = (sections['Medication'] || '').trim();
           if (medText) {
-            if (!next.medication || next.medication.length === 0) {
-              next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: '', duration: '', notes: medText }];
+            if (realTime) {
+              // Append to existing medication notes
+              if (!next.medication || next.medication.length === 0) {
+                next.medication = [{ id: crypto.randomUUID(), name: medText, dosage: '', frequency: '', duration: '', notes: '' }];
+              } else {
+                const existing = next.medication[0].notes || '';
+                if (!existing.includes(medText)) {
+                  next.medication[0].notes = existing ? `${existing}, ${medText}` : medText;
+                }
+              }
             } else {
-              const existing = next.medication[0].notes || '';
-              next.medication[0].notes = existing ? `${existing} ${medText}` : medText;
+              if (!next.medication || next.medication.length === 0) {
+                next.medication = [{ id: crypto.randomUUID(), name: '', dosage: '', frequency: '', duration: '', notes: medText }];
+              } else {
+                const existing = next.medication[0].notes || '';
+                next.medication[0].notes = existing ? `${existing} ${medText}` : medText;
+              }
             }
           }
         }
 
         if (sections['Instructions']) {
           const t = sections['Instructions'].trim();
-          if (t) next.advice = (next.advice ? next.advice + ' ' : '') + t;
+          if (t) {
+            if (realTime && next.advice && next.advice.includes(t)) {
+              // Don't duplicate instructions
+              return next;
+            }
+            next.advice = (next.advice ? next.advice + ' ' : '') + t;
+          }
         }
 
         if (sections['Follow-Up']) {
@@ -1044,16 +1086,26 @@ const ConsultationForm = () => {
 
         if (sections['Notes']) {
           const t = sections['Notes'].trim();
-          if (t) next.advice = (next.advice ? next.advice + ' ' : '') + t;
+          if (t) {
+            if (realTime && next.advice && next.advice.includes(t)) {
+              return next;
+            }
+            next.advice = (next.advice ? next.advice + ' ' : '') + t;
+          }
         }
 
         return next;
       });
-      toast.success('Applied Voice Rx to the form');
-      setShowVoiceRx(false);
+      
+      if (!realTime) {
+        toast.success('Applied Voice Rx to the form');
+        setShowVoiceRx(false);
+      }
     } catch (e) {
       console.error('VoiceRx apply error', e);
-      toast.error('Failed to apply Voice Rx');
+      if (!realTime) {
+        toast.error('Failed to apply Voice Rx');
+      }
     }
   };
 
@@ -1237,8 +1289,8 @@ const ConsultationForm = () => {
         inbuiltTemplates={INBUILT_TEMPLATES}
       />
 
-      {/* Voice Rx Modal */}
-      <VoiceRxModal
+      {/* Enhanced Voice Rx Modal */}
+      <EnhancedVoiceRxModal
         isOpen={showVoiceRx}
         onClose={() => setShowVoiceRx(false)}
         onApply={handleVoiceRxApply}

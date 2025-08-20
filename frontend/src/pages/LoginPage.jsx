@@ -5,11 +5,59 @@ import Button from "../components/ui/Button";
 import axios from "axios";
 import { setDoctorToken } from "../utils/auth";
 
-// Create a dedicated axios instance for login to avoid interceptors
+// Create a dedicated axios instance for login with minimal configuration
 const loginAxios = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.onrender.com/api',
-  timeout: 10000,
+  timeout: 60000, // Allow up to 60s to handle cold starts on Render
+  withCredentials: false, // Disable credentials for CORS
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 });
+
+// Clean up headers that might cause CORS issues
+loginAxios.interceptors.request.use(config => {
+  const newConfig = { ...config };
+  // Remove problematic headers
+  delete newConfig.headers['Cache-Control'];
+  delete newConfig.headers['Pragma'];
+  delete newConfig.headers['Expires'];
+  
+  // Ensure Content-Type is set for non-form data
+  if (!(newConfig.data instanceof FormData)) {
+    newConfig.headers['Content-Type'] = 'application/json';
+    if (newConfig.data) {
+      newConfig.data = JSON.stringify(newConfig.data);
+    }
+  } else {
+    delete newConfig.headers['Content-Type'];
+  }
+  
+  return newConfig;
+});
+
+// Simple request interceptor for logging
+loginAxios.interceptors.request.use(request => {
+  console.log('Starting Request', JSON.stringify(request, null, 2));
+  return request;
+});
+
+// Simple response interceptor for logging
+loginAxios.interceptors.response.use(
+  response => {
+    console.log('Response:', JSON.stringify(response.data, null, 2));
+    return response;
+  },
+  error => {
+    console.error('Error Response:', {
+      message: error.message,
+      config: error.config,
+      response: error.response?.data
+    });
+    return Promise.reject(error);
+  }
+);
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -65,38 +113,56 @@ const LoginPage = () => {
       ['doctorName', 'userName', 'userRole', 'userPermissions', 'userId', 'clinicName']
         .forEach(key => localStorage.removeItem(key));
 
-      // Use the login-specific axios instance
-      const { data } = await loginAxios.post("/doctor/access-token", {
-        email,
-        password,
-      }, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        retry: true, // Enable retry for this request
-        'axios-retry': {
-          retries: 2,
-          retryDelay: (retryCount) => {
-            return retryCount * 1000; // 1s, 2s delay between retries
+      console.log('Attempting login with:', { email });
+      
+      // Try to make login request directly with a simple retry on network/timeout
+      console.log('Attempting to log in...');
+      const attemptLogin = async (retries = 1) => {
+        try {
+          return await loginAxios.post('/doctor/access-token', {
+            email: email.trim(),
+            password: password.trim()
+          });
+        } catch (error) {
+          console.error('Login request failed:', error);
+          const isTimeout = error.code === 'ECONNABORTED';
+          const isNetwork = error.code === 'ERR_NETWORK';
+          if ((isTimeout || isNetwork) && retries > 0) {
+            // Likely server cold start or flaky network; retry once after short delay
+            await new Promise(r => setTimeout(r, 2000));
+            return attemptLogin(retries - 1);
           }
+          if (isNetwork) {
+            throw new Error('Cannot connect to the server. Please check your internet connection.');
+          }
+          throw error; // Re-throw to be caught by the outer catch
         }
-      });
+      };
 
-      if (data?.accessToken) {
-        const doctorId = data.doctorId || (data.doctor && data.doctor.id);
-        if (doctorId) {
+      const response = await attemptLogin(1);
+
+      console.log('Login response:', response);
+
+      if (response?.data?.accessToken) {
+        const { accessToken, doctorId, doctor } = response.data;
+        const id = doctorId || (doctor && doctor.id);
+        
+        if (id) {
+          console.log('Login successful, doctorId:', id);
+          
           // Batch localStorage operations
           const storageUpdates = [
-            ['doctorId', doctorId],
-            ['isUserLogin', 'false']
+            ['doctorId', id],
+            ['isUserLogin', 'false'],
+            ['doctorName', doctor?.name || ''],
+            ['clinicName', doctor?.clinicName || '']
           ];
           
-          storageUpdates.forEach(([key, value]) => 
-            localStorage.setItem(key, value)
-          );
+          storageUpdates.forEach(([key, value]) => {
+            localStorage.setItem(key, value);
+          });
           
-          setDoctorToken(data.accessToken);
+          setDoctorToken(accessToken);
           
           // Use replace instead of href to prevent adding to history
           window.location.replace('/');
@@ -104,15 +170,40 @@ const LoginPage = () => {
         }
       }
       
-      setSubmitError("Invalid response from server. Please try again.");
+      console.error('Invalid response format:', response);
+      setSubmitError("Invalid response from server. Please contact support.");
     } catch (err) {
-      const errorMessage = err.response?.data?.error || "Login failed. Please try again.";
-      setSubmitError(errorMessage);
+      console.error('Login error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       
-      // Clear form on specific errors
-      if (errorMessage.toLowerCase().includes('invalid credentials')) {
-        setPassword('');
+      let errorMessage = "Login failed. Please try again.";
+      
+      if (err.response) {
+        // Handle specific HTTP errors
+        if (err.response.status === 401) {
+          errorMessage = "Invalid email or password. Please try again.";
+        } else if (err.response.status >= 500) {
+          errorMessage = "Server error. Please try again later.";
+        }
+        
+        // Use server error message if available
+        if (err.response.data?.error) {
+          errorMessage = err.response.data.error;
+        }
+      } else if (err.request) {
+        // Differentiate timeout vs network
+        if (err.message && err.message.toLowerCase().includes('timeout')) {
+          errorMessage = "Server is waking up. Please wait a few seconds and try again.";
+        } else {
+          errorMessage = "No response from server. Please check your connection.";
+        }
       }
+      
+      setSubmitError(errorMessage);
+      setPassword(''); // Clear password field on error
     } finally {
       setIsLoading(false);
     }

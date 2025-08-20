@@ -19,6 +19,7 @@ const doctorMiddleware = require('../middlewares/doctor.middleware');
 const messageRoutes = require('./message.routes');
 const userRoutes = require('./user.routes');
 const aiRoutes = require('./ai.routes');
+const voicerxRoutes = require('./voicerx.routes');
 
 const router = express.Router();
 
@@ -111,5 +112,6 @@ router.use(
 router.use('/messages', messageRoutes);
 router.use('/:doctorId/users', userRoutes);
 router.use('/:doctorId/ai', aiRoutes);
+router.use('/voicerx', voicerxRoutes);
 
 module.exports = router;

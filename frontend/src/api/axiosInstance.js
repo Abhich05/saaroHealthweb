@@ -7,13 +7,33 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.o
 // Create axios instance with optimized defaults
 const axiosInstance = axios.create({
   baseURL,
-  withCredentials: true,
-  timeout: 10000, // 10 second timeout
+  withCredentials: false, // Disable credentials for CORS
+  timeout: 15000, // 15 second timeout
   headers: {
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
   }
+});
+
+// Remove problematic headers that cause CORS issues
+axiosInstance.interceptors.request.use(config => {
+  // Remove headers that might cause CORS issues
+  const headers = { ...config.headers };
+  delete headers['Cache-Control'];
+  delete headers['Pragma'];
+  delete headers['Expires'];
+  
+  // Only add Content-Type for non-form data requests
+  if (!(config.data instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  } else {
+    delete headers['Content-Type'];
+  }
+  
+  return {
+    ...config,
+    headers
+  };
 });
 
 // Request cache

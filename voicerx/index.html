@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Rx AI System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <i class="fas fa-stethoscope medical-icon"></i>
+                <h1>Voice Rx AI System</h1>
+                <div class="session-controls">
+                    <button class="btn btn--outline btn--sm" id="endSessionBtn" style="display: none;">End Session</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section class="dashboard-section" id="dashboardSection">
+                <div class="info-grid">
+                    <!-- Doctor Information -->
+                    <div class="card info-card">
+                        <div class="card__header">
+                            <h3><i class="fas fa-user-md"></i> Doctor Information</h3>
+                        </div>
+                        <div class="card__body">
+                            <div class="form-group">
+                                <label class="form-label" for="doctorName">Doctor Name</label>
+                                <input type="text" class="form-control" id="doctorName" placeholder="Enter doctor name">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="doctorSpecialty">Specialty</label>
+                                <input type="text" class="form-control" id="doctorSpecialty" placeholder="Enter specialty">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Patient Information -->
+                    <div class="card info-card">
+                        <div class="card__header">
+                            <h3><i class="fas fa-user"></i> Patient Information</h3>
+                        </div>
+                        <div class="card__body">
+                            <div class="form-group">
+                                <label class="form-label" for="patientName">Patient Name</label>
+                                <input type="text" class="form-control" id="patientName" placeholder="Enter patient name">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="patientAge">Age</label>
+                                    <input type="number" class="form-control" id="patientAge" placeholder="Age">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="patientGender">Gender</label>
+                                    <select class="form-control" id="patientGender">
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Start Session Button -->
+                <div class="session-start">
+                    <button class="btn btn--primary btn--lg start-session-btn" id="startSessionBtn">
+                        <i class="fas fa-play"></i>
+                        Start Session
+                    </button>
+                </div>
+            </section>
+
+            <!-- Recording Section -->
+            <section class="recording-section hidden" id="recordingSection">
+                <div class="recording-grid">
+                    <!-- Voice Recording Panel -->
+                    <div class="card recording-card">
+                        <div class="card__header">
+                            <h3><i class="fas fa-microphone"></i> Voice Recording</h3>
+                            <div class="recording-status" id="recordingStatus">
+                                <span class="status status--info">Ready</span>
+                            </div>
+                        </div>
+                        <div class="card__body">
+                            <!-- Audio Waveform Visualization -->
+                            <div class="waveform-container" id="waveformContainer">
+                                <div class="waveform">
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                    <div class="wave-bar"></div>
+                                </div>
+                            </div>
+
+                            <!-- Recording Controls -->
+                            <div class="recording-controls">
+                                <button class="btn btn--primary recording-btn" id="recordingBtn">
+                                    <i class="fas fa-microphone"></i>
+                                    <span id="recordingBtnText">Tap to Speak</span>
+                                </button>
+                                <button class="btn btn--secondary stop-btn hidden" id="stopBtn">
+                                    <i class="fas fa-stop"></i>
+                                    Stop Recording
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tips Panel -->
+                    <div class="card tips-card">
+                        <div class="card__header">
+                            <h3><i class="fas fa-lightbulb"></i> Dictation Tips</h3>
+                        </div>
+                        <div class="card__body">
+                            <ul class="tips-list" id="tipsList"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Section -->
+                <div class="processing-section hidden" id="processingSection">
+                    <div class="card processing-card">
+                        <div class="card__body">
+                            <div class="processing-content">
+                                <div class="processing-spinner">
+                                    <i class="fas fa-brain fa-spin"></i>
+                                </div>
+                                <div class="processing-text">
+                                    <h4 id="processingTitle">Analyzing Medical Content...</h4>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="progressFill"></div>
+                                    </div>
+                                    <p id="processingStep">Capturing speech input...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section hidden" id="resultsSection">
+                <div class="card results-card">
+                    <div class="card__header">
+                        <h3><i class="fas fa-file-medical"></i> Generated Prescription</h3>
+                        <div class="prescription-actions">
+                            <button class="btn btn--secondary btn--sm" id="editModeBtn">
+                                <i class="fas fa-edit"></i>
+                                Edit Mode
+                            </button>
+                            <button class="btn btn--primary btn--sm" id="printBtn">
+                                <i class="fas fa-print"></i>
+                                Print
+                            </button>
+                            <button class="btn btn--primary btn--sm" id="saveBtn">
+                                <i class="fas fa-save"></i>
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card__body">
+                        <div class="prescription-content" id="prescriptionContent">
+                            <!-- Prescription content will be generated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- New Session Button -->
+                <div class="new-session">
+                    <button class="btn btn--primary btn--lg" id="newSessionBtn">
+                        <i class="fas fa-plus"></i>
+                        Start New Session
+                    </button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

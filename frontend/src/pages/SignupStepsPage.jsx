@@ -68,17 +68,8 @@ const SignupStepsPage = () => {
     };
   };
 
-  // Memoized change handler with debouncing
-  const handleChange = useCallback(debounce((e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  }, 150), []);
-
-  // For immediate feedback on input
-  const handleInput = (e) => {
+  // Handle input changes
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -177,23 +168,76 @@ const SignupStepsPage = () => {
                     name="fullName"
                     value={formData.fullName}
                     onChange={handleChange}
-                    onInput={handleInput}
                     error={errors.fullName}
                     placeholder="Enter your full name"
                     required
                   />
-                  <InputField name="email" label="Email" placeholder="you@example.com" value={formData.email} onChange={handleChange} error={errors.email} />
-                  <InputField name="mobile" label="Mobile" placeholder="10-digit number" value={formData.mobile} onChange={handleChange} error={errors.mobile} />
-                  <InputField type="password" name="password" label="Password" placeholder="••••••••" value={formData.password} onChange={handleChange} error={errors.password} />
-                  <InputField type="password" name="confirmPassword" label="Confirm Password" placeholder="••••••••" value={formData.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
+                  <InputField 
+                    name="email" 
+                    label="Email" 
+                    type="email"
+                    placeholder="you@example.com" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    error={errors.email} 
+                  />
+                  <InputField 
+                    name="mobile" 
+                    label="Mobile" 
+                    type="tel"
+                    placeholder="10-digit number" 
+                    value={formData.mobile} 
+                    onChange={handleChange} 
+                    error={errors.mobile} 
+                  />
+                  <InputField 
+                    type="password" 
+                    name="password" 
+                    label="Password" 
+                    placeholder="••••••••" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    error={errors.password} 
+                  />
+                  <InputField 
+                    type="password" 
+                    name="confirmPassword" 
+                    label="Confirm Password" 
+                    placeholder="••••••••" 
+                    value={formData.confirmPassword} 
+                    onChange={handleChange} 
+                    error={errors.confirmPassword} 
+                  />
                 </>
               )}
 
               {step === 2 && (
                 <>
-                  <InputField name="rmcNumber" label="RMC Number" placeholder="RMC12345" value={formData.rmcNumber} onChange={handleChange} error={errors.rmcNumber} />
-                  <InputField name="address" label="Address" placeholder="Street, City" value={formData.address} onChange={handleChange} error={errors.address} />
-                  <InputField name="clinicName" label="Clinic Name (Optional)" placeholder="Healthy Life Clinic" value={formData.clinicName} onChange={handleChange} />
+                  <InputField 
+                    name="rmcNumber" 
+                    label="RMC Number" 
+                    placeholder="RMC12345" 
+                    value={formData.rmcNumber} 
+                    onChange={handleChange} 
+                    error={errors.rmcNumber} 
+                  />
+                  <InputField 
+                    name="address" 
+                    label="Address" 
+                    placeholder="Street, City" 
+                    value={formData.address} 
+                    onChange={handleChange} 
+                    error={errors.address} 
+                    as="textarea"
+                    rows={3}
+                  />
+                  <InputField 
+                    name="clinicName" 
+                    label="Clinic Name (Optional)" 
+                    placeholder="Healthy Life Clinic" 
+                    value={formData.clinicName} 
+                    onChange={handleChange} 
+                  />
                 </>
               )}
             </div>
@@ -264,14 +308,19 @@ const SignupStepsPage = () => {
 };
 
 // Reusable Input Component
-const InputField = ({ label, error, ...props }) => (
-  <div>
-    {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
-    <input
+const InputField = ({ label, error, as: Component = 'input', ...props }) => (
+  <div className="mb-4">
+    {label && (
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {props.required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    )}
+    <Component
       {...props}
-      className={`w-full border p-2 rounded-xl focus:ring-2 focus:ring-purple-400 focus:outline-none transition ${
-        error ? "border-red-400" : "border-gray-300"
-      }`}
+      className={`w-full border p-3 rounded-xl focus:ring-2 focus:ring-purple-400 focus:outline-none transition ${
+        error ? "border-red-400" : "border-gray-300 hover:border-purple-300"
+      } ${Component === 'textarea' ? 'resize-y min-h-[100px]' : ''}`}
     />
     {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
   </div>

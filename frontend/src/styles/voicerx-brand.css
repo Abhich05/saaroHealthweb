@@ -1,0 +1,288 @@
+/* VoiceRx Brand Color Integration */
+/* Matches the brand colors from the existing UI components */
+
+:root {
+  --brand-primary: #7047d1;
+  --brand-primary-hover: #5a3bb8;
+  --brand-primary-light: #8b5cf6;
+  --brand-primary-lighter: #a78bfa;
+  --brand-primary-lightest: #c4b5fd;
+  
+  --brand-secondary: #6b7280;
+  --brand-success: #10b981;
+  --brand-danger: #ef4444;
+  --brand-warning: #f59e0b;
+  
+  --brand-gray-50: #f9fafb;
+  --brand-gray-100: #f3f4f6;
+  --brand-gray-200: #e5e7eb;
+  --brand-gray-300: #d1d5db;
+  --brand-gray-400: #9ca3af;
+  --brand-gray-500: #6b7280;
+  --brand-gray-600: #4b5563;
+  --brand-gray-700: #374151;
+  --brand-gray-800: #1f2937;
+  --brand-gray-900: #111827;
+}
+
+/* Enhanced VoiceRx Modal Specific Styles */
+.voice-rx-modal {
+  --color-primary: var(--brand-primary);
+  --color-primary-hover: var(--brand-primary-hover);
+  --color-primary-light: var(--brand-primary-light);
+  --color-primary-lighter: var(--brand-primary-lighter);
+  --color-primary-lightest: var(--brand-primary-lightest);
+}
+
+/* Waveform Animation */
+.voice-rx-waveform-bar {
+  background: linear-gradient(to top, var(--brand-primary), var(--brand-primary-light));
+  transition: all 0.1s ease-in-out;
+  border-radius: 2px;
+}
+
+.voice-rx-waveform-bar.active {
+  background: linear-gradient(to top, var(--brand-primary-hover), var(--brand-primary));
+  box-shadow: 0 0 8px rgba(112, 71, 209, 0.4);
+}
+
+/* Recording Status Indicator */
+.voice-rx-recording-pulse {
+  animation: voiceRxPulse 2s infinite;
+}
+
+@keyframes voiceRxPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* Processing Animation */
+.voice-rx-processing-spinner {
+  border-color: var(--brand-primary);
+  border-top-color: transparent;
+}
+
+/* Prescription Content Styling */
+.voice-rx-prescription {
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  color: var(--brand-gray-800);
+}
+
+.voice-rx-prescription h1,
+.voice-rx-prescription h2,
+.voice-rx-prescription h3 {
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+/* Form Input Styling */
+.voice-rx-input {
+  border: 2px solid var(--brand-gray-200);
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.voice-rx-input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(112, 71, 209, 0.1);
+}
+
+/* Card Styling */
+.voice-rx-card {
+  background: white;
+  border: 1px solid var(--brand-gray-200);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.voice-rx-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--brand-primary-lighter);
+}
+
+/* Section Headers */
+.voice-rx-section-header {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-light));
+  color: white;
+  padding: 16px 20px;
+  border-radius: 8px 8px 0 0;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* Status Badges */
+.voice-rx-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voice-rx-badge.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--brand-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.voice-rx-badge.processing {
+  background: rgba(112, 71, 209, 0.1);
+  color: var(--brand-primary);
+  border: 1px solid rgba(112, 71, 209, 0.2);
+}
+
+.voice-rx-badge.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--brand-danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Button Overrides for VoiceRx */
+.voice-rx-modal .btn-primary {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-light));
+  border: none;
+  color: white;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.voice-rx-modal .btn-primary:hover {
+  background: linear-gradient(135deg, var(--brand-primary-hover), var(--brand-primary));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(112, 71, 209, 0.3);
+}
+
+/* Transcript Display */
+.voice-rx-transcript {
+  background: var(--brand-gray-50);
+  border: 2px dashed var(--brand-gray-200);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 120px;
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  color: var(--brand-gray-700);
+}
+
+.voice-rx-transcript.active {
+  border-color: var(--brand-primary);
+  background: rgba(112, 71, 209, 0.02);
+}
+
+/* Progress Steps */
+.voice-rx-progress-step {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--brand-gray-500);
+  font-size: 14px;
+}
+
+.voice-rx-progress-step.completed {
+  color: var(--brand-success);
+}
+
+.voice-rx-progress-step.active {
+  color: var(--brand-primary);
+  font-weight: 500;
+}
+
+.voice-rx-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 12px;
+  background: var(--brand-gray-300);
+  transition: all 0.2s ease;
+}
+
+.voice-rx-progress-step.completed .voice-rx-progress-dot {
+  background: var(--brand-success);
+}
+
+.voice-rx-progress-step.active .voice-rx-progress-dot {
+  background: var(--brand-primary);
+  animation: voiceRxDotPulse 1.5s infinite;
+}
+
+@keyframes voiceRxDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .voice-rx-modal {
+    margin: 16px;
+  }
+  
+  .voice-rx-section-header {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  
+  .voice-rx-input {
+    padding: 10px 12px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Dark mode support (if needed) */
+@media (prefers-color-scheme: dark) {
+  .voice-rx-modal {
+    --brand-gray-50: #1f2937;
+    --brand-gray-100: #374151;
+    --brand-gray-200: #4b5563;
+    --brand-gray-300: #6b7280;
+    --brand-gray-700: #d1d5db;
+    --brand-gray-800: #f3f4f6;
+  }
+}
+
+/* Accessibility Improvements */
+.voice-rx-modal [role="button"]:focus,
+.voice-rx-modal button:focus {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.voice-rx-modal [aria-live] {
+  position: relative;
+}
+
+/* Animation for smooth transitions */
+.voice-rx-fade-in {
+  animation: voiceRxFadeIn 0.3s ease-out;
+}
+
+@keyframes voiceRxFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
