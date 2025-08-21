@@ -1,3 +1,12 @@
+// Utility: wrap a promise with a timeout to prevent indefinite waiting
+const withTimeout = (promise, ms = 6000, label = 'operation') => {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
+};
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Modal from './GenericModal';
 import Button from './Button';
@@ -284,6 +293,8 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
   const finalTranscriptRef = useRef('');
+  // Guard to prevent stale async updates from previous recordings
+  const processingIdRef = useRef(0);
   const [currentTranscript, setCurrentTranscript] = useState('');
   // Recording lifecycle helpers
   const blobReadyPromiseRef = useRef(null);
@@ -442,6 +453,18 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   // Start recording
   const startRecording = async () => {
     try {
+      // Reset state for a fresh session
+      processingIdRef.current += 1; // invalidate any in-flight processing
+      setTranscript('');
+      finalTranscriptRef.current = '';
+      setAudioBlob(null);
+      setAutoFields([]);
+      setGeneratedPrescription('');
+      // Do not pre-initialize empty sections; only patientInfo remains
+      setGeneratedForm(prev => ({
+        patientInfo: prev.patientInfo || { name: '', age: '', gender: '' }
+      }));
+      setCurrentStep('recording');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
@@ -512,6 +535,9 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
         await blobReadyPromiseRef.current;
       }
     } catch {}
+
+    // Small delay to allow SpeechRecognition.onresult to flush the last final chunk
+    await new Promise(res => setTimeout(res, 400));
     
     // Process with backend service
     processWithBackendService();
@@ -519,10 +545,13 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
 
   // Process with backend service and generate structured form
   const processWithBackendService = async () => {
+    // capture processing id to discard late results from earlier sessions
+    const pid = ++processingIdRef.current;
     if (!audioBlob) {
       // No audio blob available: build a local structured form from current state
       console.debug('[VoiceRx] No audioBlob; using generateStructuredForm fallback');
       generateStructuredForm();
+      setCurrentStep('generated');
       return;
     }
 
@@ -533,6 +562,8 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
         doctorId: doctorId || null
       });
 
+      // If another session started, ignore this one
+      if (pid !== processingIdRef.current) return;
       if (response?.result) {
         console.debug('[VoiceRx] Backend result keys:', Object.keys(response.result));
         const { transcript: serverTranscript, sections, fields, entities, prescriptionText } = response.result;
@@ -674,17 +705,20 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       console.error('[VoiceRx] Backend processing failed:', error);
       generateStructuredForm();
     } finally {
+      if (pid !== processingIdRef.current) return; // stale run, abort applying state
       console.debug('[VoiceRx] autoFields length:', (autoFields || []).length);
       // If backend didn't yield structure, try server-side parse-text first (uses same parser as ASR path)
       try {
-        if ((!autoFields || autoFields.length === 0) && (transcript && transcript.trim())) {
+        const textCandidate = (finalTranscriptRef.current && finalTranscriptRef.current.trim()) ? finalTranscriptRef.current : transcript;
+        if ((!autoFields || autoFields.length === 0) && (textCandidate && textCandidate.trim())) {
           try {
-            const textResp = await voiceService.parseText(transcript, {
+            const textResp = await withTimeout(voiceService.parseText(textCandidate, {
               storeResult: false,
               patientId: patientId || null,
               doctorId: doctorId || null
-            });
+            }), 6000, 'parse-text');
             if (textResp?.result) {
+              if (pid !== processingIdRef.current) return; // stale after network round-trip
               const { sections, fields } = textResp.result;
               // Build generated form similarly to fields path
               const symptoms = [];
@@ -713,12 +747,11 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
                   age: patientInfo.age || (fields?.patient_age ? fields.patient_age.value : ''),
                   gender: patientInfo.gender || (fields?.patient_gender ? fields.patient_gender.value : '')
                 },
-                symptoms: symptoms.length > 0 ? symptoms : (prev.symptoms || []),
-                diagnosis: prev.diagnosis || [],
-                medications: medications.length > 0 ? medications : (prev.medications || []),
-                investigations: investigations.length > 0 ? investigations : (prev.investigations || []),
-                instructions: instructions.length > 0 ? instructions : (prev.instructions || []),
-                followUp
+                ...(symptoms.length > 0 ? { symptoms } : {}),
+                ...(medications.length > 0 ? { medications } : {}),
+                ...(investigations.length > 0 ? { investigations } : {}),
+                ...(instructions.length > 0 ? { instructions } : {}),
+                ...(followUp ? { followUp } : {})
               }));
               if (sections && Object.keys(sections).length) setAutoFields(buildAutoFields(sections));
               else if (fields) setAutoFields(buildAutoFields(fields));
@@ -732,15 +765,17 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
 
       // If still empty, do local regex-based transcript fallback
       try {
-        if ((!autoFields || autoFields.length === 0) && (transcript && transcript.trim())) {
-          const derived = buildFieldsFromTranscript(transcript);
+        const textCandidate2 = (finalTranscriptRef.current && finalTranscriptRef.current.trim()) ? finalTranscriptRef.current : transcript;
+        if ((!autoFields || autoFields.length === 0) && (textCandidate2 && textCandidate2.trim())) {
+          const derived = buildFieldsFromTranscript(textCandidate2);
           if (derived.fields.length) {
+            if (pid !== processingIdRef.current) return; // stale guard
             setAutoFields(derived.fields);
             setGeneratedForm(prev => ({
               ...prev,
-              symptoms: prev.symptoms && prev.symptoms.length ? prev.symptoms : derived.parts.symptoms || [],
-              medications: prev.medications && prev.medications.length ? prev.medications : derived.parts.medications || [],
-              instructions: prev.instructions && prev.instructions.length ? prev.instructions : derived.parts.instructions || []
+              ...(derived.parts.symptoms && derived.parts.symptoms.length ? { symptoms: derived.parts.symptoms } : {}),
+              ...(derived.parts.medications && derived.parts.medications.length ? { medications: derived.parts.medications } : {}),
+              ...(derived.parts.instructions && derived.parts.instructions.length ? { instructions: derived.parts.instructions } : {})
             }));
             console.debug('[VoiceRx] Populated fields from transcript fallback');
           }
@@ -748,24 +783,24 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       } catch (e) {
         console.warn('[VoiceRx] Transcript fallback failed:', e);
       }
-      setCurrentStep('generated');
+      if (pid === processingIdRef.current) setCurrentStep('generated');
     }
   };
 
   // Generate structured form locally
   const generateStructuredForm = () => {
+    const s = extractSymptoms(transcript);
+    const m = extractMedications(transcript);
+    const i = extractInstructions(transcript);
     setGeneratedForm({
       patientInfo: { 
         name: patientInfo.name || 'Patient', 
         age: patientInfo.age || '', 
         gender: patientInfo.gender || '' 
       },
-      symptoms: prescriptionData.symptoms || [],
-      diagnosis: [],
-      medications: prescriptionData.medications || [],
-      investigations: prescriptionData.investigations || [],
-      instructions: prescriptionData.instructions || [],
-      followUp: ''
+      ...(s && s.length ? { symptoms: s } : {}),
+      ...(m && m.length ? { medications: m } : {}),
+      ...(i && i.length ? { instructions: i } : {})
     });
     setAutoFields(buildAutoFields({
       patient_name: patientInfo.name || 'Patient',
