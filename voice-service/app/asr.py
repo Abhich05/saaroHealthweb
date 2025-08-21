@@ -1,7 +1,6 @@
 from __future__ import annotations
 import tempfile
 from typing import List, Tuple
-from faster_whisper import WhisperModel
 
 
 class ASR:
@@ -11,14 +10,26 @@ class ASR:
         self.compute_type = compute_type
         self.beam_size = beam_size
         self.vad_filter = vad_filter
-        self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        self._stub = model_name and model_name.lower() == "stub"
+        self.model = None
+        if not self._stub:
+            # Lazy import to avoid loading ctranslate2 when using stub mode
+            from faster_whisper import WhisperModel  # type: ignore
+            self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+
+    @property
+    def is_stub(self) -> bool:
+        return self._stub
 
     def transcribe_file(self, file_bytes: bytes) -> Tuple[str, List[dict]]:
+        if self._stub:
+            # Stub mode: no ASR, return empty transcript
+            return "", []
         # Save to temp file and let ffmpeg handle decoding
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=True) as tmp:
             tmp.write(file_bytes)
             tmp.flush()
-            segments, info = self.model.transcribe(
+            segments, info = self.model.transcribe(  # type: ignore[attr-defined]
                 tmp.name,
                 beam_size=self.beam_size,
                 vad_filter=self.vad_filter,

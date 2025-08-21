@@ -115,6 +115,52 @@ async def transcribe_parse(
     return TranscribeResponse(result=result, stored=stored)
 
 
+# New: text-only parsing endpoint (no ASR required)
+@app.post("/parse-text", response_model=TranscribeResponse)
+async def parse_text(
+    text: str = Form(..., description="Raw transcript text to parse"),
+    store_result: bool = Form(False),
+    patientId: str | None = Form(None),
+    doctorId: str | None = Form(None),
+) -> TranscribeResponse:
+    try:
+        transcript = text or ""
+        segments: list[dict] = []
+        fields, sections, overall, field_scores, clarifications_raw = parse_prescription(transcript, segments)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Parsing failed: {e}")
+
+    seg_models = [Segment(**s) for s in segments]
+    field_models: Dict[str, ParsedField] = {}
+    for k, v in fields.items():
+        field_models[k] = ParsedField(label=LABELS.get(k, k), value=v, confidence=field_scores.get(k, 0.75))
+    clar_models = [Clarification(**c) for c in clarifications_raw]
+
+    result = ParsedPrescription(
+        transcript=transcript,
+        confidence_overall=overall,
+        segments=seg_models,
+        fields=field_models,
+        sections=sections,
+        clarifications=clar_models,
+    )
+
+    stored = None
+    if store_result:
+        try:
+            inserted_id = store.store_prescription(
+                patient_id=patientId,
+                doctor_id=doctorId,
+                result=result.model_dump(),
+                meta={"engine": "text-only", "model": settings.asr_model},
+            )
+            stored = StoreResult(ok=bool(inserted_id), id=inserted_id if inserted_id else None)
+        except Exception:
+            stored = StoreResult(ok=False)
+
+    return TranscribeResponse(result=result, stored=stored)
+
+
 # Entry point (optional)
 if __name__ == "__main__":
     import uvicorn

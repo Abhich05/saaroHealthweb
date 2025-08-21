@@ -1,6 +1,6 @@
 import os
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -16,7 +16,12 @@ class Settings:
     # Server
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8090"))
-    cors_origins: List[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    cors_origins: List[str] = field(
+        default_factory=lambda: os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173",
+        ).split(",")
+    )
 
     # Storage
     mongo_url: Optional[str] = os.getenv("MONGO_URL")

@@ -9,6 +9,30 @@ async function health() {
 }
 
 /**
+ * Parse raw transcript text without audio
+ * @param {string} text - transcript text
+ * @param {{ storeResult?: boolean, patientId?: string|null, doctorId?: string|null }} options
+ */
+async function parseText(text, options = {}) {
+  const { storeResult = false, patientId = null, doctorId = null } = options;
+  const fd = new FormData();
+  fd.append('text', text || '');
+  fd.append('store_result', String(storeResult));
+  if (patientId) fd.append('patientId', patientId);
+  if (doctorId) fd.append('doctorId', doctorId);
+
+  const res = await fetch(`${VOICE_BASE_URL}/parse-text`, {
+    method: 'POST',
+    body: fd,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`ParseText failed: ${res.status} ${t}`);
+  }
+  return res.json();
+}
+
+/**
  * Upload audio and get parsed prescription
  * @param {Blob} audioBlob - recorded audio (webm/ogg/mp4)
  * @param {{ storeResult?: boolean, patientId?: string|null, doctorId?: string|null }} options
@@ -33,4 +57,4 @@ async function transcribeParse(audioBlob, options = {}) {
   return res.json();
 }
 
-export default { VOICE_BASE_URL, health, transcribeParse };
+export default { VOICE_BASE_URL, health, transcribeParse, parseText };

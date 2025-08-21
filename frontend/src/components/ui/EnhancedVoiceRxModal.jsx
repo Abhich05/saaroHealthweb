@@ -100,51 +100,181 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
     if (!data || typeof data !== 'object') return [];
     const fields = [];
     
+    // Helper to normalize label casing
+    const humanize = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    // Helper to push a field with auto type based on content length
+    const pushField = (key, label, val) => {
+      if (val == null) return;
+      if (Array.isArray(val)) {
+        // Array of primitives or objects
+        const values = val.map((v) => {
+          if (typeof v === 'string') return v;
+          if (v && typeof v === 'object') {
+            // Try common shapes: {raw,name,dosage,...} or {label,value}
+            if ('value' in v && typeof v.value === 'string') return v.value;
+            if ('raw' in v && typeof v.raw === 'string') return v.raw;
+            if ('name' in v && typeof v.name === 'string') return v.name;
+            return Object.entries(v).map(([k, vv]) => `${humanize(k)}: ${vv}`).join(', ');
+          }
+          return String(v);
+        });
+        fields.push({ key, label, type: 'list', values });
+      } else if (typeof val === 'string') {
+        const long = val.length > 80 || val.includes('\n');
+        fields.push({ key, label, type: long ? 'textarea' : 'text', values: [val] });
+      } else if (val && typeof val === 'object') {
+        // Handle ParsedField like {label, value}
+        if ('value' in val || 'label' in val) {
+          const effLabel = humanize(val.label || label);
+          const v = val.value;
+          if (Array.isArray(v)) {
+            fields.push({ key, label: effLabel, type: 'list', values: v.map((x) => String(x)) });
+          } else if (typeof v === 'string') {
+            const long = v.length > 80 || v.includes('\n');
+            fields.push({ key, label: effLabel, type: long ? 'textarea' : 'text', values: [v] });
+          } else if (v && typeof v === 'object') {
+            const flat = Object.entries(v).map(([k, vv]) => `${humanize(k)}: ${vv}`);
+            fields.push({ key, label: effLabel, type: 'list', values: flat });
+          }
+        } else {
+          console.debug('[VoiceRx] No fields/sections/entities; using local extraction');
+          // Generic object: flatten
+          const flat = Object.entries(val).map(([k, v]) => `${humanize(k)}: ${v}`);
+          fields.push({ key, label, type: 'list', values: flat });
+        }
+      }
+    };
+
     // Handle the backend's response structure
     if (data.sections) {
-      // Use sections for field generation
       Object.entries(data.sections).forEach(([key, val]) => {
-        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-        
-        if (typeof val === 'string') {
-          const long = val.length > 80 || val.includes('\n');
-          fields.push({ key, label, type: long ? 'textarea' : 'text', values: [val] });
-        }
+        pushField(key, humanize(key), val);
       });
     } else if (data.entities) {
-      // Fallback to entities
       Object.entries(data.entities).forEach(([key, val]) => {
-        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-        
-        if (Array.isArray(val)) {
-          fields.push({ key, label, type: 'list', values: val.map(v => String(v)) });
-        } else if (typeof val === 'string') {
-          const long = val.length > 80 || val.includes('\n');
-          fields.push({ key, label, type: long ? 'textarea' : 'text', values: [val] });
-        } else if (val && typeof val === 'object') {
-          // Flatten shallow objects into key: value lines
-          const flat = Object.entries(val).map(([k, v]) => `${k}: ${v}`);
-          fields.push({ key, label, type: 'list', values: flat });
-        }
+        pushField(key, humanize(key), val);
       });
     } else {
-      // Handle regular key-value pairs
+      // Generic kv object
       Object.entries(data).forEach(([key, val]) => {
-        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-        
-        if (Array.isArray(val)) {
-          fields.push({ key, label, type: 'list', values: val.map(v => String(v)) });
-        } else if (typeof val === 'string') {
-          const long = val.length > 80 || val.includes('\n');
-          fields.push({ key, label, type: long ? 'textarea' : 'text', values: [val] });
-        } else if (val && typeof val === 'object' && !val.hasOwnProperty('label')) {
-          // Flatten shallow objects into key: value lines
-          const flat = Object.entries(val).map(([k, v]) => `${k}: ${v}`);
-          fields.push({ key, label, type: 'list', values: flat });
-        }
+        pushField(key, humanize(key), val);
       });
     }
     
+    return fields;
+  };
+
+  // Enrich autoFields with known data if values are empty
+  const enrichAutoFields = (fields) => {
+    if (!Array.isArray(fields)) return [];
+    const fillFromArrays = (label) => {
+      const lc = (label || '').toLowerCase();
+      if (lc.includes('symptom')) return (prescriptionData.symptoms || []).map(String);
+      if (lc.includes('medication') || lc.includes('drug') || lc.includes('rx')) return (prescriptionData.medications || []).map(String);
+      if (lc.includes('instruction') || lc.includes('advice')) return (prescriptionData.instructions || []).map(String);
+      if (lc.includes('investigation') || lc.includes('test')) return (prescriptionData.investigations || []).map(String);
+      if (lc.includes('diagnosis')) return (generatedForm.diagnosis || []).map(String);
+      if (lc.includes('patient name')) return [patientInfo.name || 'Patient'];
+      return [];
+    };
+
+    const result = fields.map(f => {
+      const hasValues = Array.isArray(f.values) && f.values.some(v => String(v).trim());
+      if (hasValues) return f;
+      const fallbackVals = fillFromArrays(f.label || f.key);
+      if (fallbackVals.length === 0) return f;
+      if (f.type === 'text' || f.type === 'textarea') {
+        return { ...f, values: [fallbackVals[0] || ''] };
+      }
+      return { ...f, type: 'list', values: fallbackVals };
+    });
+
+    return result;
+  };
+
+  // Fallback: derive basic sections from raw transcript text
+  const buildFieldsFromTranscript = (text) => {
+    if (!text || typeof text !== 'string') return { fields: [], parts: {} };
+    const t = text.trim();
+    const lower = t.toLowerCase();
+
+    // Helper: capture after label with or without colon, until sentence end
+    const pickAfter = (labels) => {
+      for (const label of labels) {
+        const colonRe = new RegExp(`${label}\\s*:([^\n\.]+)`, 'i');
+        const m1 = t.match(colonRe);
+        if (m1) return m1[1].trim();
+        const nonColonRe = new RegExp(`${label}\\s+([^\n\.]+)`, 'i');
+        const m2 = t.match(nonColonRe);
+        if (m2) return m2[1].trim();
+      }
+      return '';
+    };
+
+    const splitList = (s) => {
+      if (!s) return [];
+      // split on commas/semicolons/" and " / " then " phrases
+      return s
+        .split(/[,;]|\band\b|\bthen\b/gi)
+        .map(x => x.trim())
+        .filter(Boolean);
+    };
+
+    const symptomsStr = pickAfter(['symptoms', 'complaints', 'presenting complaints', 'symptom']);
+    const medsStr = pickAfter(['medication', 'medications', 'rx', 'prescribe', 'drug']);
+    const instrStr = pickAfter(['instructions', 'advice', 'recommendations', 'instruct']);
+
+    const parts = {
+      symptoms: splitList(symptomsStr),
+      medications: splitList(medsStr),
+      instructions: splitList(instrStr),
+    };
+
+    // If still empty, try heuristic sentences
+    if (parts.symptoms.length === 0 && /symptom|complain|pain|fever|cough|ache|nausea/.test(lower)) {
+      parts.symptoms = [t];
+    }
+
+    const humanize = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    const fields = [];
+    if (parts.symptoms.length) fields.push({ key: 'symptoms', label: humanize('symptoms'), type: 'list', values: parts.symptoms });
+    if (parts.medications.length) fields.push({ key: 'medications', label: humanize('medications'), type: 'list', values: parts.medications });
+    if (parts.instructions.length) fields.push({ key: 'instructions', label: humanize('instructions'), type: 'list', values: parts.instructions });
+    if (fields.length === 0) fields.push({ key: 'notes', label: 'Notes', type: 'textarea', values: [t] });
+
+    return { fields: enrichAutoFields(fields), parts };
+  };
+
+  // Derive dynamic fields from the locally generated form as a fallback
+  const deriveFieldsFromGeneratedForm = (form) => {
+    if (!form || typeof form !== 'object') return [];
+    const fields = [];
+    const humanize = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+
+    // Patient info (object) -> flatten to list
+    if (form.patientInfo && typeof form.patientInfo === 'object') {
+      const flat = Object.entries(form.patientInfo).map(([k, v]) => `${humanize(k)}: ${v ?? ''}`);
+      fields.push({ key: 'patient_info', label: 'Patient Info', type: 'list', values: flat });
+    }
+
+    // Arrays -> list fields
+    const arrayKeys = ['symptoms', 'diagnosis', 'medications', 'investigations', 'instructions'];
+    arrayKeys.forEach((key) => {
+      if (Array.isArray(form[key]) && form[key].length) {
+        fields.push({ key, label: humanize(key), type: 'list', values: form[key].map(String) });
+      }
+    });
+
+    // Follow-up -> text
+    if (typeof form.followUp === 'string' && form.followUp.trim()) {
+      fields.push({ key: 'follow_up', label: 'Follow Up', type: 'text', values: [form.followUp] });
+    }
+
+    // If nothing was added, provide a minimal editable field so UI isn't empty
+    if (fields.length === 0) {
+      fields.push({ key: 'notes', label: 'Notes', type: 'textarea', values: [''] });
+    }
+
     return fields;
   };
 
@@ -155,6 +285,9 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   const recognitionRef = useRef(null);
   const finalTranscriptRef = useRef('');
   const [currentTranscript, setCurrentTranscript] = useState('');
+  // Recording lifecycle helpers
+  const blobReadyPromiseRef = useRef(null);
+  const blobReadyResolveRef = useRef(null);
 
   // Speech Recognition setup
   const isSpeechSupported = useMemo(
@@ -196,6 +329,8 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
     };
   }, [isRecording, isPaused]);
 
+  // No auto-start; user controls start/stop explicitly
+
   // Format recording time
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -218,14 +353,7 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
         };
 
         recognition.onend = () => {
-          // Auto-restart if user is still in recording mode
-          if (isRecording) {
-            try { 
-              recognition.start(); 
-            } catch (e) {
-              // Recognition restart error handling
-            }
-          }
+          // No auto-restart; user controls recording lifecycle
         };
 
         recognition.onresult = (event) => {
@@ -317,6 +445,11 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
+      // Prepare a promise that resolves when MediaRecorder finishes and blob is set
+      blobReadyPromiseRef.current = new Promise((resolve) => {
+        blobReadyResolveRef.current = resolve;
+      });
+
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       
@@ -330,6 +463,10 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
         setAudioBlob(blob);
+        if (blobReadyResolveRef.current) {
+          try { blobReadyResolveRef.current(blob); } catch {}
+          blobReadyResolveRef.current = null;
+        }
       };
 
       mediaRecorder.start();
@@ -347,21 +484,34 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   };
 
   // Stop recording
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+  const stopRecording = async () => {
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    } catch {}
     
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-    }
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    } catch {}
 
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    } catch {}
 
     setIsRecording(false);
     setCurrentStep('processing');
+
+    // Wait for blob to be ready before processing
+    try {
+      if (blobReadyPromiseRef.current) {
+        await blobReadyPromiseRef.current;
+      }
+    } catch {}
     
     // Process with backend service
     processWithBackendService();
@@ -370,8 +520,9 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   // Process with backend service and generate structured form
   const processWithBackendService = async () => {
     if (!audioBlob) {
-      // No audio blob available
-      setCurrentStep('generated');
+      // No audio blob available: build a local structured form from current state
+      console.debug('[VoiceRx] No audioBlob; using generateStructuredForm fallback');
+      generateStructuredForm();
       return;
     }
 
@@ -383,7 +534,8 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       });
 
       if (response?.result) {
-        const { transcript: serverTranscript, sections, fields, prescriptionText } = response.result;
+        console.debug('[VoiceRx] Backend result keys:', Object.keys(response.result));
+        const { transcript: serverTranscript, sections, fields, entities, prescriptionText } = response.result;
         
         // Update transcript if we got one from server
         if (serverTranscript) {
@@ -393,6 +545,7 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
         // Generate structured form from backend response
         // The backend returns fields with specific structure and sections as key-value pairs
         if (fields) {
+          console.debug('[VoiceRx] Using fields path');
           // Convert fields to our form structure
           const symptoms = [];
           const medications = [];
@@ -449,30 +602,37 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
             followUp: followUp
           });
           
-          // Use sections for dynamic UI generation if available
+          // Use sections/entities for dynamic UI generation if available
           if (sections && Object.keys(sections).length) {
             setAutoFields(buildAutoFields(sections));
+          } else if (entities && Object.keys(entities).length) {
+            setAutoFields(buildAutoFields({ entities }));
           } else {
             // Fallback to fields for dynamic UI generation
             setAutoFields(buildAutoFields(fields));
           }
-        } else if (sections && Object.keys(sections).length) {
+        } else if ((sections && Object.keys(sections).length) || (entities && Object.keys(entities).length)) {
+          console.debug('[VoiceRx] Using sections/entities path');
           // If we have sections but no fields, use sections directly
           setGeneratedForm({
             patientInfo: { 
-              name: patientInfo.name || sections['Patient Name'] || 'Patient', 
-              age: patientInfo.age || sections['Patient Age'] || '', 
-              gender: patientInfo.gender || sections['Gender'] || '' 
+              name: patientInfo.name || (sections ? sections['Patient Name'] : '') || 'Patient', 
+              age: patientInfo.age || (sections ? sections['Patient Age'] : '') || '', 
+              gender: patientInfo.gender || (sections ? sections['Gender'] : '') || '' 
             },
-            symptoms: sections['Symptoms'] ? [sections['Symptoms']] : prescriptionData.symptoms || [],
+            symptoms: sections && sections['Symptoms'] ? [sections['Symptoms']] : prescriptionData.symptoms || [],
             diagnosis: [],
-            medications: sections['Medication'] ? [sections['Medication']] : prescriptionData.medications || [],
+            medications: sections && sections['Medication'] ? [sections['Medication']] : prescriptionData.medications || [],
             investigations: prescriptionData.investigations || [],
-            instructions: sections['Instructions'] ? [sections['Instructions']] : prescriptionData.instructions || [],
-            followUp: sections['Follow-Up'] || ''
+            instructions: sections && sections['Instructions'] ? [sections['Instructions']] : prescriptionData.instructions || [],
+            followUp: (sections && sections['Follow-Up']) || ''
           });
           
-          setAutoFields(buildAutoFields(sections));
+          if (sections && Object.keys(sections).length) {
+            setAutoFields(buildAutoFields(sections));
+          } else if (entities && Object.keys(entities).length) {
+            setAutoFields(buildAutoFields({ entities }));
+          }
         } else {
           // Use local extraction if neither fields nor sections are available
           setGeneratedForm({
@@ -505,13 +665,89 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
         }
       } else {
         // Fallback to local processing
+        console.warn('[VoiceRx] No result from backend; generating structured form locally');
         generateStructuredForm();
       }
     } catch (error) {
       // Backend processing failed
       // Fallback to local processing
+      console.error('[VoiceRx] Backend processing failed:', error);
       generateStructuredForm();
     } finally {
+      console.debug('[VoiceRx] autoFields length:', (autoFields || []).length);
+      // If backend didn't yield structure, try server-side parse-text first (uses same parser as ASR path)
+      try {
+        if ((!autoFields || autoFields.length === 0) && (transcript && transcript.trim())) {
+          try {
+            const textResp = await voiceService.parseText(transcript, {
+              storeResult: false,
+              patientId: patientId || null,
+              doctorId: doctorId || null
+            });
+            if (textResp?.result) {
+              const { sections, fields } = textResp.result;
+              // Build generated form similarly to fields path
+              const symptoms = [];
+              const medications = [];
+              const investigations = [];
+              const instructions = [];
+              if (fields?.symptoms?.value) {
+                if (Array.isArray(fields.symptoms.value)) symptoms.push(...fields.symptoms.value);
+                else if (typeof fields.symptoms.value === 'string') symptoms.push(fields.symptoms.value);
+              }
+              if (fields?.medications?.value) {
+                if (Array.isArray(fields.medications.value)) {
+                  medications.push(...fields.medications.value.map(m => typeof m === 'object' ? (m.raw || m.name || JSON.stringify(m)) : m));
+                } else if (typeof fields.medications.value === 'string') {
+                  medications.push(fields.medications.value);
+                }
+              }
+              if (fields?.instructions?.value) {
+                if (Array.isArray(fields.instructions.value)) instructions.push(...fields.instructions.value);
+                else if (typeof fields.instructions.value === 'string') instructions.push(fields.instructions.value);
+              }
+              const followUp = fields?.follow_up?.value || '';
+              setGeneratedForm(prev => ({
+                patientInfo: {
+                  name: patientInfo.name || (fields?.patient_name ? fields.patient_name.value : 'Patient'),
+                  age: patientInfo.age || (fields?.patient_age ? fields.patient_age.value : ''),
+                  gender: patientInfo.gender || (fields?.patient_gender ? fields.patient_gender.value : '')
+                },
+                symptoms: symptoms.length > 0 ? symptoms : (prev.symptoms || []),
+                diagnosis: prev.diagnosis || [],
+                medications: medications.length > 0 ? medications : (prev.medications || []),
+                investigations: investigations.length > 0 ? investigations : (prev.investigations || []),
+                instructions: instructions.length > 0 ? instructions : (prev.instructions || []),
+                followUp
+              }));
+              if (sections && Object.keys(sections).length) setAutoFields(buildAutoFields(sections));
+              else if (fields) setAutoFields(buildAutoFields(fields));
+              console.debug('[VoiceRx] Populated fields via /parse-text');
+            }
+          } catch (e) {
+            console.warn('[VoiceRx] /parse-text failed, falling back to local regex:', e);
+          }
+        }
+      } catch {}
+
+      // If still empty, do local regex-based transcript fallback
+      try {
+        if ((!autoFields || autoFields.length === 0) && (transcript && transcript.trim())) {
+          const derived = buildFieldsFromTranscript(transcript);
+          if (derived.fields.length) {
+            setAutoFields(derived.fields);
+            setGeneratedForm(prev => ({
+              ...prev,
+              symptoms: prev.symptoms && prev.symptoms.length ? prev.symptoms : derived.parts.symptoms || [],
+              medications: prev.medications && prev.medications.length ? prev.medications : derived.parts.medications || [],
+              instructions: prev.instructions && prev.instructions.length ? prev.instructions : derived.parts.instructions || []
+            }));
+            console.debug('[VoiceRx] Populated fields from transcript fallback');
+          }
+        }
+      } catch (e) {
+        console.warn('[VoiceRx] Transcript fallback failed:', e);
+      }
       setCurrentStep('generated');
     }
   };
@@ -970,273 +1206,67 @@ Generated by Voice Rx AI System
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-semibold text-gray-800">AI Generated Prescription Form</h3>
         <div className="flex space-x-2">
-          <Button
-            onClick={() => setCurrentStep('results')}
-            variant="outline"
-            size="sm"
-          >
+          <Button onClick={() => setCurrentStep('results')} variant="outline" size="sm">
             <FiDownload className="mr-1" />
             View Prescription
           </Button>
         </div>
       </div>
 
-      {/* Dynamic AI fields (preferred) */}
-      {autoFields && autoFields.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-96 overflow-y-auto">
-          {autoFields.map((field, fIdx) => (
-            <div key={field.key + fIdx} className="border rounded-lg p-4">
-              <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-                <span className="w-2 h-2 bg-[#7047d1] rounded-full mr-2"></span>
-                {field.label}
-              </h4>
-              <div className="space-y-2">
-                {field.type === 'list' && field.values.map((v, vIdx) => (
-                  <div key={vIdx} className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={v}
-                      onChange={(e) => updateAutoFieldValue(fIdx, vIdx, e.target.value)}
-                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-                      placeholder={`Enter ${field.label.toLowerCase()}...`}
-                    />
-                    <button
-                      onClick={() => removeAutoFieldItem(fIdx, vIdx)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-
-                {field.type === 'text' && (
+      {/* Always render dynamic fields; derive from generatedForm if autoFields is empty */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-96 overflow-y-auto">
+        {(autoFields && autoFields.length > 0 ? autoFields : deriveFieldsFromGeneratedForm(generatedForm)).map((field, fIdx) => (
+          <div key={field.key + fIdx} className="border rounded-lg p-4">
+            <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+              <span className="w-2 h-2 bg-[#7047d1] rounded-full mr-2"></span>
+              {field.label}
+            </h4>
+            <div className="space-y-2">
+              {field.type === 'list' && field.values.map((v, vIdx) => (
+                <div key={vIdx} className="flex items-center space-x-2">
                   <input
                     type="text"
-                    value={field.values[0] || ''}
-                    onChange={(e) => updateAutoFieldValue(fIdx, 0, e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    value={v}
+                    onChange={(e) => updateAutoFieldValue(fIdx, vIdx, e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder={`Enter ${field.label.toLowerCase()}...`}
                   />
-                )}
-
-                {field.type === 'textarea' && (
-                  <textarea
-                    value={field.values[0] || ''}
-                    onChange={(e) => updateAutoFieldValue(fIdx, 0, e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    rows={3}
-                  />
-                )}
-
-                {field.type === 'list' && (
                   <button
-                    onClick={() => addAutoFieldItem(fIdx)}
-                    className="text-[#7047d1] hover:text-[#5a3bb8] text-sm"
+                    onClick={() => removeAutoFieldItem(fIdx, vIdx)}
+                    className="text-red-500 hover:text-red-700"
                   >
-                    + Add
+                    ×
                   </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        // Fallback: existing grouped UI if AI didn't return sections
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-96 overflow-y-auto">
-          {/* Left Column */}
-          <div className="space-y-4">
-            {/* Patient Information */}
-            <div className="border rounded-lg p-4">
-              <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-                <span className="w-2 h-2 bg-[#7047d1] rounded-full mr-2"></span>
-                Patient Information
-              </h4>
-              <div className="space-y-2">
+                </div>
+              ))}
+              {field.type === 'text' && (
                 <input
                   type="text"
-                  placeholder="Patient Name"
-                  value={generatedForm.patientInfo.name}
-                  onChange={(e) => setGeneratedForm(prev => ({
-                    ...prev,
-                    patientInfo: { ...prev.patientInfo, name: e.target.value }
-                  }))}
+                  value={field.values[0] || ''}
+                  onChange={(e) => updateAutoFieldValue(fIdx, 0, e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Age"
-                    value={generatedForm.patientInfo.age}
-                    onChange={(e) => setGeneratedForm(prev => ({
-                      ...prev,
-                      patientInfo: { ...prev.patientInfo, age: e.target.value }
-                    }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  />
-                  <select
-                    value={generatedForm.patientInfo.gender}
-                    onChange={(e) => setGeneratedForm(prev => ({
-                      ...prev,
-                      patientInfo: { ...prev.patientInfo, gender: e.target.value }
-                    }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-          {/* Symptoms */}
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-gray-800 flex items-center">
-                <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                Symptoms ({generatedForm.symptoms.length})
-              </h4>
-              <button
-                onClick={() => addFormField('symptoms')}
-                className="text-[#7047d1] hover:text-[#5a3bb8] text-sm"
-              >
-                + Add
-              </button>
-            </div>
-            <div className="space-y-2">
-              {generatedForm.symptoms.map((symptom, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={symptom}
-                    onChange={(e) => updateFormField('symptoms', index, e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="Enter symptom..."
-                  />
-                  <button
-                    onClick={() => removeFormField('symptoms', index)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {generatedForm.symptoms.length === 0 && (
-                <p className="text-gray-500 text-sm">No symptoms detected. Click + Add to add manually.</p>
+              )}
+              {field.type === 'textarea' && (
+                <textarea
+                  value={field.values[0] || ''}
+                  onChange={(e) => updateAutoFieldValue(fIdx, 0, e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  rows={3}
+                />
+              )}
+              {field.type === 'list' && (
+                <button
+                  onClick={() => addAutoFieldItem(fIdx)}
+                  className="text-[#7047d1] hover:text-[#5a3bb8] text-sm"
+                >
+                  + Add
+                </button>
               )}
             </div>
           </div>
-
-          {/* Medications */}
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-gray-800 flex items-center">
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                Medications ({generatedForm.medications.length})
-              </h4>
-              <button
-                onClick={() => addFormField('medications')}
-                className="text-[#7047d1] hover:text-[#5a3bb8] text-sm"
-              >
-                + Add
-              </button>
-            </div>
-            <div className="space-y-2">
-              {generatedForm.medications.map((medication, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={medication}
-                    onChange={(e) => updateFormField('medications', index, e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="Enter medication..."
-                  />
-                  <button
-                    onClick={() => removeFormField('medications', index)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {generatedForm.medications.length === 0 && (
-                <p className="text-gray-500 text-sm">No medications detected. Click + Add to add manually.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-4">
-          {/* Instructions */}
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-gray-800 flex items-center">
-                <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                Instructions ({generatedForm.instructions.length})
-              </h4>
-              <button
-                onClick={() => addFormField('instructions')}
-                className="text-[#7047d1] hover:text-[#5a3bb8] text-sm"
-              >
-                + Add
-              </button>
-            </div>
-            <div className="space-y-2">
-              {generatedForm.instructions.map((instruction, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <textarea
-                    value={instruction}
-                    onChange={(e) => updateFormField('instructions', index, e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="Enter instruction..."
-                    rows={2}
-                  />
-                  <button
-                    onClick={() => removeFormField('instructions', index)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {generatedForm.instructions.length === 0 && (
-                <p className="text-gray-500 text-sm">No instructions detected. Click + Add to add manually.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Follow-up */}
-          <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-              <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-              Follow-up
-            </h4>
-            <textarea
-              value={generatedForm.followUp}
-              onChange={(e) => setGeneratedForm(prev => ({
-                ...prev,
-                followUp: e.target.value
-              }))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              placeholder="Enter follow-up instructions..."
-              rows={3}
-            />
-          </div>
-
-          {/* Original Transcript */}
-          <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-              <span className="w-2 h-2 bg-gray-500 rounded-full mr-2"></span>
-              Original Voice Input
-            </h4>
-            <div className="bg-gray-50 rounded-md p-3 max-h-24 overflow-y-auto">
-              <p className="text-sm text-gray-700">{transcript || 'No transcript available'}</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
-      )}
 
       {/* Action Buttons */}
       <div className="flex justify-between items-center pt-4 border-t">

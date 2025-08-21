@@ -7,8 +7,16 @@ services:
       - "8090:8090"
     environment:
       - PYTHONUNBUFFERED=1
+      # Use a stub model to avoid heavy dependencies while we validate connectivity
+      - ASR_MODEL=stub
+      - ASR_DEVICE=cpu
+      - ASR_COMPUTE_TYPE=int8
+      # Allow Vite dev origins
+      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
     volumes:
       - .:/app
-    # Uncomment and add your environment variables below
-    # environment:
-    #   - YOUR_ENV_VAR=value
+      # Persist model cache so downloads are reused between container restarts
+      - voice_models_cache:/root/.cache
+
+volumes:
+  voice_models_cache:
