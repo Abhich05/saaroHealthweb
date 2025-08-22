@@ -10,10 +10,13 @@ import { TableLoader } from './Loading';
  *  - renderCell?: (row: object, accessor: string) => ReactNode
  *  - loading?: boolean
  *  - loadingRows?: number
+ *  - sortable?: boolean
+ *  - sortBy?: string
+ *  - sortDir?: 'asc' | 'desc'
+ *  - onSort?: (accessor: string) => void
  */
 
-const GenericTable = ({ columns = [], data = [], renderCell, loading = false, loadingRows = 5 }) => {
-  console.log(columns)
+const GenericTable = ({ columns = [], data = [], renderCell, loading = false, loadingRows = 5, sortable = false, sortBy, sortDir, onSort }) => {
   
   if (loading) {
     return <TableLoader rows={loadingRows} columns={columns.length} />;
@@ -24,14 +27,30 @@ const GenericTable = ({ columns = [], data = [], renderCell, loading = false, lo
       <table className="table-fixed min-w-full">
         <thead className="bg-gray-50">
           <tr>
-            {columns.map((col) => (
-              <th
-                key={col.accessor}
-                className={`px-6 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap ${col.className || ""}`}
-              >
-                {col.label}
-              </th>
-            ))}
+            {columns.map((col) => {
+              const isSorted = sortable && sortBy === col.accessor;
+              const canSort = sortable && !col.disableSort;
+              const sortIcon = isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '↕';
+              return (
+                <th
+                  key={col.accessor}
+                  className={`px-6 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap ${col.className || ""}`}
+                >
+                  <div className={`flex items-center gap-1 ${canSort ? 'cursor-pointer select-none' : ''}`}
+                       onClick={() => canSort && onSort && onSort(col.accessor)}
+                       role={canSort ? 'button' : undefined}
+                       aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                       tabIndex={canSort ? 0 : -1}
+                       onKeyDown={(e) => { if (canSort && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSort(col.accessor); } }}
+                  >
+                    <span>{col.label}</span>
+                    {canSort && (
+                      <span className="text-[10px] text-gray-400">{sortIcon}</span>
+                    )}
+                  </div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

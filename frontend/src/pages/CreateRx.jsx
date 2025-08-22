@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState, useEffect, useContext, useRef } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import GenericTable from "../components/ui/GenericTable";
@@ -10,8 +10,6 @@ import ModalToast from "../components/ui/ModalToast";
 import Pagination from "../components/ui/Pagination";
 import { DoctorIdContext } from "../App";
 import axiosInstance from "../api/axiosInstance";
-import VoiceRxModal from "../components/ui/VoiceRxModal";
-import { FiMic } from "react-icons/fi";
 
 const generateUID = () => Math.floor(10000 + Math.random() * 90000).toString();
 
@@ -29,25 +27,24 @@ const mapPatientToTableRow = (patient) => {
 };
 
 const CreateRx = () => {
-  const navigate = useNavigate();
   const doctorId = useContext(DoctorIdContext);
+  const requestCtrlRef = useRef(null);
+  const isMountedRef = useRef(true);
   const [rxData, setRxData] = useState([]);
   const [mappedData, setMappedData] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("All");
+  // Debounced search: separate input vs effective term
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [existingPatientModal, setExistingPatientModal] = useState(false);
   const [existingPatient, setExistingPatient] = useState(null);
   const [modalErrors, setModalErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalToast, setModalToast] = useState(null);
-  // Selected patient for VoiceRx storage linkage
-  const [selectedPatientId, setSelectedPatientId] = useState(null);
-  const [selectedPatientName, setSelectedPatientName] = useState("");
 
   // Pagination
   const [pagination, setPagination] = useState({
@@ -55,6 +52,27 @@ const CreateRx = () => {
     limit: 10,
     total: 0
   });
+
+  // Utility: delay helper for retries
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // RBAC: derive minimal permissions from localStorage (fallback to full)
+  const getPermissions = () => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      if (!raw) return { createRx: 'full' };
+      const parsed = JSON.parse(raw);
+      return parsed?.permissions || { createRx: 'full' };
+    } catch { return { createRx: 'full' }; }
+  };
+  const [permissions, setPermissions] = useState(getPermissions());
+  const canRegister = permissions?.createRx === 'full';
+  // Track when component mounted to suppress transient errors on initial load
+  const mountedAtRef = useRef(Date.now());
+
+  // Sorting state (declare early so it's available in fetchPatients)
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
 
   // New patient form data
   const [newPatient, setNewPatient] = useState({
@@ -79,13 +97,23 @@ const CreateRx = () => {
     setModalToast({ message, type, duration });
   };
 
-  // Fetch patients
-  const fetchPatients = async () => {
+  // Fetch patients with retry (exponential backoff on transient errors)
+  const fetchPatients = async (attempt = 0) => {
     if (!doctorId) return;
+    // cancel any in-flight request before starting a new one
+    if (requestCtrlRef.current) {
+      try { requestCtrlRef.current.abort(); } catch {}
+    }
+    const controller = new AbortController();
+    requestCtrlRef.current = controller;
     setLoading(true);
     setError("");
     try {
-      const res = await axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`);
+      const t0 = performance.now();
+      const params = { page: pagination.page, limit: pagination.limit };
+      if (searchTerm) params.searchQuery = searchTerm;
+      if (sortBy) { params.sortBy = sortBy; params.sortDir = sortDir || 'asc'; }
+      const res = await axiosInstance.get(`/patient/get-all/${doctorId}`, { params, signal: controller.signal });
       const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
       setRxData(patients);
       setMappedData(patients.map(mapPatientToTableRow));
@@ -93,21 +121,68 @@ const CreateRx = () => {
         ...prev,
         total: res.data.pagination?.totalPatients || patients.length
       }));
+      const t1 = performance.now();
+      console.debug('[metrics] fetchPatients duration(ms):', Math.round(t1 - t0), { page: pagination.page, limit: pagination.limit, search: !!searchTerm });
     } catch (err) {
-      setRxData([]);
-      const errorMessage = "Failed to fetch patients. Please try again.";
-      setError(errorMessage);
-      if (isModalOpen) {
-        showModalToast(errorMessage, 'error', 4000);
+      // Ignore cancellations due to navigation or rapid param changes
+      const code = err?.code || err?.name;
+      const msg = (err?.message || '').toLowerCase();
+      if (
+        code === 'ERR_CANCELED' ||
+        code === 'CanceledError' ||
+        code === 'AbortError' ||
+        msg.includes('canceled') ||
+        msg.includes('cancelled') ||
+        msg.includes('aborted')
+      ) {
+        return;
+      }
+      const status = err?.response?.status;
+      const isTransient = !status || (status >= 500 && status <= 599);
+      if (isTransient && attempt < 2) {
+        // retry with backoff: 300ms, 1200ms
+        await delay((attempt + 1) * 300 * (attempt + 1) * 2);
+        return fetchPatients(attempt + 1);
+      } else {
+        const errorMessage = "Failed to fetch patients. Please try again.";
+        if (!isMountedRef.current) return;
+        // Only surface error if there is no existing data to show
+        const justMounted = Date.now() - mountedAtRef.current < 800;
+        setError(prev => (rxData && rxData.length > 0 ? prev : (justMounted ? prev : errorMessage)));
+        if (isModalOpen && (!rxData || rxData.length === 0)) {
+          showModalToast(errorMessage, 'error', 4000);
+        }
+        console.warn('[metrics] fetchPatients error', { status, attempt });
       }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPatients();
-  }, [doctorId, pagination.page, pagination.limit, searchTerm]);
+  }, [doctorId, pagination.page, pagination.limit, searchTerm, sortBy, sortDir]);
+
+  // Abort any pending request on unmount and prevent state updates
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (requestCtrlRef.current) {
+        try { requestCtrlRef.current.abort(); } catch {}
+      }
+    };
+  }, []);
+
+  // Debounce search input into searchTerm
+  useEffect(() => {
+    const id = setTimeout(() => setSearchTerm(searchInput.trim()), 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  // Ensure we start from page 1 whenever search changes
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [searchTerm]);
 
   const handleRegisterPatient = () => {
     setModalErrors({});
@@ -238,6 +313,7 @@ const CreateRx = () => {
       handleCloseModal();
       fetchPatients(); // Refresh the list
       showModalToast('Patient registered successfully!', 'success', 3000);
+      auditLog('patient_register_success', { phone: payload.phoneNumber, name: payload.fullName });
     } catch (err) {
       // Handle 409 Conflict - Patient already exists
       if (err.response?.status === 409) {
@@ -300,19 +376,36 @@ const CreateRx = () => {
     setIsModalOpen(true);
   };
 
-  // Remove full page loading
-  if (error) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="bg-red-100 text-red-700 p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-      </div>
-    </div>
-  );
+  // Do not block page on error; show inline banner instead
 
   const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
-  const filteredData = mappedData.filter(row => categoryFilter === "All" || row.category === categoryFilter);
+  const handleSort = (accessor) => {
+    setSortBy(prev => {
+      if (prev === accessor) {
+        setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return accessor;
+    });
+  };
+
+  // Client-side sort after mapping
+  const sortedData = React.useMemo(() => {
+    const arr = [...mappedData];
+    if (!sortBy) return arr;
+    arr.sort((a, b) => {
+      const av = (a[sortBy] ?? '').toString().toLowerCase();
+      const bv = (b[sortBy] ?? '').toString().toLowerCase();
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [mappedData, sortBy, sortDir]);
+
+  const filteredData = sortedData.filter(row => categoryFilter === "All" || row.category === categoryFilter);
 
   return (
     <div className="flex h-screen">
@@ -325,20 +418,29 @@ const CreateRx = () => {
               <h1 className="text-3xl leading-10 font-semibold">Create Rx</h1>
               <div className="flex flex-col items-end">
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setIsVoiceModalOpen(true)} className="flex items-center gap-2">
-                    <FiMic /> Voice Rx
+                  <Button onClick={handleRegisterPatient} disabled={!canRegister} title={!canRegister ? 'Insufficient permissions to register patients' : undefined}>Register Patient</Button>
+                  <Button variant="outline" onClick={() => exportPatientsCSV(filteredData)}>
+                    Export CSV
                   </Button>
-                  <Button onClick={handleRegisterPatient}>Register Patient</Button>
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {selectedPatientId ? (
-                    <span>Selected for VoiceRx: <span className="font-medium">{selectedPatientName}</span></span>
-                  ) : (
-                    <span>Select a patient in the table to link VoiceRx storage</span>
-                  )}
                 </div>
               </div>
             </div>
+
+            {/* Error banner */}
+            {error && (
+              <div role="alert" aria-live="polite" className="flex items-start gap-3 p-3 rounded-md bg-red-50 border border-red-200 text-red-800">
+                <span className="font-semibold">Error:</span>
+                <span className="flex-1">{error}</span>
+                <button
+                  type="button"
+                  onClick={() => fetchPatients()}
+                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                  aria-label="Retry loading patients"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             {/* Category Capsules */}
             <div className="flex flex-wrap gap-2 mb-4">
@@ -356,8 +458,8 @@ const CreateRx = () => {
             </div>
 
             <SearchBar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
+              searchTerm={searchInput}
+              setSearchTerm={setSearchInput}
               placeholder="Search by Name, UID, Phone"
             />
 
@@ -366,6 +468,10 @@ const CreateRx = () => {
               data={filteredData}
               loading={loading}
               loadingRows={8}
+              sortable={true}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
               renderCell={(row, accessor) => {
                 if (accessor === "category") {
                   const colorMap = {
@@ -383,19 +489,11 @@ const CreateRx = () => {
                 if (accessor === "action") {
                   return (
                     <div className="flex items-center gap-2">
-                      <Link to={`/${row.uid}/consult`}>
+                      <Link to={`/${row.uid}/consult`} onClick={() => auditLog('patient_consult_open', { uid: row.uid, patientId: row._id })}>
                         <span className={`text-sm px-3 py-1 text-[#69598C] text-700 hover:underline cursor-pointer`}>
                           Consult
                         </span>
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedPatientId(row._id); setSelectedPatientName(row.name); }}
-                        className="text-sm px-3 py-1 text-blue-700 hover:underline cursor-pointer"
-                        title="Link this patient to VoiceRx storage"
-                      >
-                        Use for VoiceRx
-                      </button>
                     </div>
                   );
                 }
@@ -409,7 +507,28 @@ const CreateRx = () => {
               }}
             />
 
-            <div className="flex justify-center mt-4">
+            {/* Empty state */}
+            {!loading && !error && filteredData.length === 0 && (
+              <div className="mt-6 p-6 text-center border rounded-md bg-gray-50 text-gray-600">
+                <p className="font-medium">No patients found</p>
+                <p className="text-sm mt-1">Try adjusting your search or category filter.</p>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center mt-4">
+              <div className="flex items-center gap-2 text-sm">
+                <label htmlFor="pageSize" className="text-gray-600">Rows per page:</label>
+                <select
+                  id="pageSize"
+                  value={pagination.limit}
+                  onChange={e => setPagination(prev => ({ ...prev, page: 1, limit: Number(e.target.value) }))}
+                  className="border rounded px-2 py-1"
+                >
+                  {[10, 25, 50].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
               <Pagination
                 currentPage={pagination.page}
                 totalPages={totalPages}
@@ -448,10 +567,13 @@ const CreateRx = () => {
                     value={newPatient.phone}
                     onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
                     className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.phone ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                    aria-invalid={!!modalErrors.phone}
+                    aria-describedby={modalErrors.phone ? 'err-phone' : undefined}
                   />
                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
                     Primary Phone Number *
                   </label>
+                  {modalErrors.phone && (<p id="err-phone" className="mt-1 text-xs text-red-600">{modalErrors.phone}</p>)}
                 </div>
               </div>
               <div className="relative mt-4">
@@ -461,35 +583,41 @@ const CreateRx = () => {
                   value={newPatient.altPhone || ""}
                   onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                  aria-invalid={!!modalErrors.altPhone}
+                  aria-describedby={modalErrors.altPhone ? 'err-altPhone' : undefined}
                 />
                 <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
                   Alternate Phone Number (Optional)
                 </label>
+                {modalErrors.altPhone && (<p id="err-altPhone" className="mt-1 text-xs text-red-600">{modalErrors.altPhone}</p>)}
               </div>
             </div>
 
             {/* Basic Information Section */}
             <div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                 <div className="relative">
-                   <select
-                     value={newPatient.title || ""}
-                     onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
-                     className={`w-full border rounded-md px-4 py-3 text-sm appearance-none peer ${modalErrors.title ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                   >
-                     <option value="">Title</option>
-                     <option>Mr</option>
-                     <option>Ms</option>
-                     <option>Mrs</option>
-                     <option>Dr</option>
-                   </select>
-                   <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                     ▼
-                   </div>
-                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
-                     Title *
-                   </label>
-                 </div>
+                <div className="relative">
+                  <select
+                    value={newPatient.title || ""}
+                    onChange={(e) => setNewPatient({ ...newPatient, title: e.target.value })}
+                    className={`w-full border rounded-md px-4 py-3 text-sm appearance-none peer ${modalErrors.title ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                    aria-invalid={!!modalErrors.title}
+                    aria-describedby={modalErrors.title ? 'err-title' : undefined}
+                  >
+                    <option value="">Title</option>
+                    <option>Mr</option>
+                    <option>Ms</option>
+                    <option>Mrs</option>
+                    <option>Dr</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    ▼
+                  </div>
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
+                    Title *
+                  </label>
+                  {modalErrors.title && (<p id="err-title" className="mt-1 text-xs text-red-600">{modalErrors.title}</p>)}
+                </div>
 
                 <div className="relative">
                   <input
@@ -498,10 +626,13 @@ const CreateRx = () => {
                     value={newPatient.name}
                     onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
                     className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.name ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                    aria-invalid={!!modalErrors.name}
+                    aria-describedby={modalErrors.name ? 'err-name' : undefined}
                   />
                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
                     Full Name *
                   </label>
+                  {modalErrors.name && (<p id="err-name" className="mt-1 text-xs text-red-600">{modalErrors.name}</p>)}
                 </div>
 
                 <div className="relative">
@@ -522,31 +653,34 @@ const CreateRx = () => {
             {/* Personal Information Section */}
             <div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                 <div className="relative">
-                   <input
-                     type="date"
-                     value={newPatient.dob || ""}
-                     onChange={(e) => {
-                       const dob = e.target.value;
-                       let age = "";
-                       if (dob) {
-                         const today = new Date();
-                         const birthDate = new Date(dob);
-                         age = today.getFullYear() - birthDate.getFullYear();
-                         const monthDiff = today.getMonth() - birthDate.getMonth();
-                         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                           age--;
-                         }
-                       }
-                       setNewPatient({ ...newPatient, dob, age: age.toString() });
-                     }}
-                     className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.dob ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                     max={new Date().toISOString().split('T')[0]}
-                   />
-                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
-                     Date of Birth *
-                   </label>
-                 </div>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={newPatient.dob || ""}
+                    onChange={(e) => {
+                      const dob = e.target.value;
+                      let age = "";
+                      if (dob) {
+                        const today = new Date();
+                        const birthDate = new Date(dob);
+                        age = today.getFullYear() - birthDate.getFullYear();
+                        const monthDiff = today.getMonth() - birthDate.getMonth();
+                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                          age--;
+                        }
+                      }
+                      setNewPatient({ ...newPatient, dob, age: age.toString() });
+                    }}
+                    className={`w-full border rounded-md px-4 py-3 text-sm peer ${modalErrors.dob ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                    aria-invalid={!!modalErrors.dob}
+                    aria-describedby={modalErrors.dob ? 'err-dob' : undefined}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
+                    Date of Birth *
+                  </label>
+                  {modalErrors.dob && (<p id="err-dob" className="mt-1 text-xs text-red-600">{modalErrors.dob}</p>)}
+                </div>
                 <div className="relative">
                   <input
                     type="number"
@@ -568,6 +702,8 @@ const CreateRx = () => {
                     value={newPatient.gender || ""}
                     onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
                     className={`w-full border rounded-md px-4 py-3 text-sm appearance-none peer ${modalErrors.gender ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                    aria-invalid={!!modalErrors.gender}
+                    aria-describedby={modalErrors.gender ? 'err-gender' : undefined}
                   >
                     <option value="">Gender</option>
                     <option>Male</option>
@@ -580,6 +716,7 @@ const CreateRx = () => {
                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not([value=''])]:-top-2 peer-[:not([value=''])]:left-2 peer-[:not([value=''])]:text-xs peer-[:not([value=''])]:bg-white peer-[:not([value=''])]:px-1">
                     Gender *
                   </label>
+                  {modalErrors.gender && (<p id="err-gender" className="mt-1 text-xs text-red-600">{modalErrors.gender}</p>)}
                 </div>
 
                 <div className="relative">
@@ -589,10 +726,13 @@ const CreateRx = () => {
                     value={newPatient.email || ""}
                     onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 peer"
+                    aria-invalid={!!modalErrors.email}
+                    aria-describedby={modalErrors.email ? 'err-email' : undefined}
                   />
                   <label className="absolute left-3 top-3 text-sm text-gray-500 transition-all duration-200 peer-focus:-top-2 peer-focus:left-2 peer-focus:text-xs peer-focus:text-blue-600 peer-focus:bg-white peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:px-1">
                     Email Address (Optional)
                   </label>
+                  {modalErrors.email && (<p id="err-email" className="mt-1 text-xs text-red-600">{modalErrors.email}</p>)}
                 </div>
               </div>
 
@@ -752,16 +892,46 @@ const CreateRx = () => {
             </div>
           </div>
         </Modal>
-        {/* Voice Rx Modal */}
-        <VoiceRxModal
-          isOpen={isVoiceModalOpen}
-          onClose={() => setIsVoiceModalOpen(false)}
-          doctorId={doctorId}
-          patientId={selectedPatientId}
-        />
       </div>
     </div>
   );
+};
+
+// Export helper
+const exportPatientsCSV = (rows = []) => {
+  const headers = ["UID","Name","Phone","Last Visit","Category"];
+  const csvRows = [headers.join(",")];
+  rows.forEach(r => {
+    const vals = [r.uid, r.name, r.phone, r.lastVisit, r.category].map(v => {
+      const s = (v ?? '').toString();
+      // escape quotes and commas
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    });
+    csvRows.push(vals.join(","));
+  });
+  const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `patients_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// Lightweight audit logger: best-effort
+const auditLog = async (event, details = {}) => {
+  try {
+    // Attempt to post; ignore if endpoint missing
+    await axiosInstance.post('/audit/log', { event, details, ts: new Date().toISOString() });
+  } catch {
+    // Fallback to console
+    console.info('[audit]', event, details);
+  }
 };
 
 const columns = [
@@ -770,7 +940,7 @@ const columns = [
   { label: "Phone", accessor: "phone" },
   { label: "Last Visit", accessor: "lastVisit" },
   { label: "Category", accessor: "category" },
-  { label: "Action", accessor: "action" },
+  { label: "Action", accessor: "action", disableSort: true },
 ];
 
 export default CreateRx;

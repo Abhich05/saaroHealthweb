@@ -36,35 +36,13 @@ axiosInstance.interceptors.request.use(config => {
   };
 });
 
-// Request cache
+// (Optional) Response cache map (write-only below). Not read at request time to avoid interceptor misuse.
 const requestCache = new Map();
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
-// Add JWT to requests automatically
+// Add JWT to requests automatically (do NOT short-circuit with cached responses here)
 axiosInstance.interceptors.request.use(
-  (config) => {
-    // Skip cache for non-GET requests
-    if (config.method !== 'get') {
-      return addAuthHeader(config);
-    }
-
-    // Check cache first for GET requests
-    const cacheKey = `${config.url}:${JSON.stringify(config.params)}`;
-    const cached = requestCache.get(cacheKey);
-    
-    if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY)) {
-      // Return cached response
-      return {
-        ...cached.response,
-        headers: {
-          ...cached.response.headers,
-          'x-cache': 'HIT',
-        },
-      };
-    }
-
-    return addAuthHeader(config);
-  },
+  (config) => addAuthHeader(config),
   (error) => Promise.reject(error)
 );
 
@@ -85,10 +63,7 @@ axiosInstance.interceptors.response.use(
   (response) => {
     if (response.config.method === 'get' && response.status === 200) {
       const cacheKey = `${response.config.url}:${JSON.stringify(response.config.params)}`;
-      requestCache.set(cacheKey, {
-        response,
-        timestamp: Date.now()
-      });
+      requestCache.set(cacheKey, { response, timestamp: Date.now() });
     }
     return response;
   },

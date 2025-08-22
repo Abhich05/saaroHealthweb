@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiSearch } from "react-icons/fi";
-import { IoIosArrowDown } from "react-icons/io";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
 import GenericTable from "../components/ui/GenericTable";
@@ -11,9 +9,8 @@ import Button from "../components/ui/Button";
 import SearchBar from '../components/ui/SearchBar';
 import Pagination from "../components/ui/Pagination"; // using your existing Pagination
 import { DoctorIdContext } from '../App';
-import Loading from "../components/ui/Loading";
 
-const categoryOptions = ["All", "New", "Follow-up", "Chronic", "Emergency"];
+// Category filter options are rendered as capsules; no dropdown needed
 
 const columns = [
   { label: "UID", accessor: "uid" },
@@ -28,7 +25,6 @@ const columns = [
 const AllPatients = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [patients, setPatients] = useState([]); // Start with empty array
@@ -36,6 +32,21 @@ const AllPatients = () => {
   const doctorId = useContext(DoctorIdContext);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const requestCtrlRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const mountedAtRef = useRef(Date.now());
+
+  // RBAC: read permissions from localStorage
+  const getPermissions = () => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      if (!raw) return { createRx: 'full' };
+      const parsed = JSON.parse(raw);
+      return parsed?.permissions || { createRx: 'full' };
+    } catch { return { createRx: 'full' }; }
+  };
+  const [permissions] = useState(getPermissions());
+  const canRegister = permissions?.createRx === 'full';
 
   const [formData, setFormData] = useState({
     primaryPhone: "",
@@ -56,9 +67,28 @@ const AllPatients = () => {
   const [errors, setErrors] = useState({});
 
   const [pagination, setPagination] = useState({ totalPatients: 0, page: 1, limit: 7 });
-  const rowsPerPage = 7;
+  // Sorting state
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const handleSort = (accessor) => {
+    setSortBy(prev => {
+      if (prev === accessor) {
+        setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return accessor;
+    });
+  };
   // Filtered patients by category
   const filteredPatients = patients.filter(p => categoryFilter === 'All' || p.category === categoryFilter);
+
+  // Debounce search
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  useEffect(() => {
+    const h = setTimeout(() => setDebouncedSearchTerm(searchTerm.trim()), 400);
+    return () => clearTimeout(h);
+  }, [searchTerm]);
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -105,18 +135,9 @@ const AllPatients = () => {
     };
     console.log('Register Patient Payload:', payload);
     axiosInstance.post(`/patient/${doctorId}`, payload)
-      .then(() => {
-        // Refresh patient list
-        axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}`)
-          .then(res => {
-            const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
-            setPatients(patients.map(mapPatientToTableRow));
-            setPagination(prev => ({
-              ...prev,
-              totalPatients: res.data.pagination?.totalPatients || patients.length
-            }));
-          })
-          .catch(() => setPatients([]));
+      .then(async () => {
+        // Refresh patient list using the same fetch util with params
+        await fetchPatients();
         setFormData({
           primaryPhone: "",
           alternatePhone: "",
@@ -159,25 +180,61 @@ const AllPatients = () => {
     setPagination(prev => ({ ...prev, page: 1 }));
   }, [searchTerm]);
 
-  useEffect(() => {
+  const fetchPatients = async (attempt = 0) => {
     if (!doctorId) return;
+    // cancel any in-flight request before starting a new one
+    if (requestCtrlRef.current) { try { requestCtrlRef.current.abort(); } catch {} }
+    const controller = new AbortController();
+    requestCtrlRef.current = controller;
     setLoading(true);
     setError(null);
-    axiosInstance.get(`/patient/get-all/${doctorId}?page=${pagination.page}&limit=${pagination.limit}&searchQuery=${encodeURIComponent(searchTerm)}`)
-      .then(res => {
-        const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
-        setPatients(patients.map(mapPatientToTableRow));
-        setPagination(prev => ({
-          ...prev,
-          totalPatients: res.data.pagination?.totalPatients || patients.length
-        }));
-      })
-      .catch((err) => {
-        setPatients([]);
-        setError("Failed to fetch patients. Please try again.");
-      })
-      .finally(() => setLoading(false));
-  }, [doctorId, pagination.page, pagination.limit, searchTerm]);
+    try {
+      const params = { page: pagination.page, limit: pagination.limit };
+      if (debouncedSearchTerm) params.searchQuery = debouncedSearchTerm;
+      if (sortBy) { params.sortBy = sortBy; params.sortDir = sortDir || 'asc'; }
+      const res = await axiosInstance.get(`/patient/get-all/${doctorId}`, { params, signal: controller.signal });
+      const list = Array.isArray(res.data.patient) ? res.data.patient : [];
+      if (!isMountedRef.current) return;
+      setPatients(list.map(mapPatientToTableRow));
+      setPagination(prev => ({ ...prev, totalPatients: res.data.pagination?.totalPatients || list.length }));
+    } catch (e) {
+      const code = e?.code || e?.name;
+      const msg = (e?.message || '').toLowerCase();
+      if (
+        code === 'ERR_CANCELED' ||
+        code === 'CanceledError' ||
+        code === 'AbortError' ||
+        msg.includes('canceled') ||
+        msg.includes('cancelled') ||
+        msg.includes('aborted')
+      ) {
+        return;
+      }
+      // Retry on transient errors (network or 5xx)
+      const status = e?.response?.status;
+      const isTransient = !status || (status >= 500 && status <= 599);
+      if (isTransient && attempt < 2) {
+        await new Promise(r => setTimeout(r, (attempt + 1) * 300 * (attempt + 1) * 2));
+        return fetchPatients(attempt + 1);
+      }
+      if (!isMountedRef.current) return;
+      const justMounted = Date.now() - mountedAtRef.current < 800;
+      // Do not wipe existing data; only show error banner if we have nothing to show and not in initial window
+      setError(prev => ((patients && patients.length > 0) || justMounted ? prev : "Failed to fetch patients. Please try again."));
+    } finally { if (isMountedRef.current) setLoading(false); }
+  };
+
+  useEffect(() => { fetchPatients(); }, [doctorId, pagination.page, pagination.limit, debouncedSearchTerm, sortBy, sortDir]);
+
+  // Abort any pending request on unmount and prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (requestCtrlRef.current) {
+        try { requestCtrlRef.current.abort(); } catch {}
+      }
+    };
+  }, []);
 
   const mapPatientToTableRow = (patient) => {
     // If patient is nested under patientId (from .populate)
@@ -193,15 +250,7 @@ const AllPatients = () => {
     };
   };
 
-  // Remove full page loading
-  if (error) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="bg-red-100 text-red-700 p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-      </div>
-    </div>
-  );
+  // Inline error banner instead of full-page block
 
   return (
     <div className="flex h-screen">
@@ -210,9 +259,23 @@ const AllPatients = () => {
         <Header />
         <main className="flex-1 p-2 bg-white overflow-y-auto">
           <div className="max-w-[90%] mx-auto py-8 space-y-6">
+            {error && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold">Error</p>
+                  <p className="text-sm">{error}</p>
+                </div>
+                <button
+                  onClick={fetchPatients}
+                  className="bg-red-600 text-white text-sm px-3 py-1 rounded"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl leading-10 font-semibold">All Patients</h1>
-              <Button onClick={() => setIsModalOpen(true)}>
+              <Button onClick={() => setIsModalOpen(true)} disabled={!canRegister}>
                 Register Patient
               </Button>
             </div>
@@ -238,39 +301,17 @@ const AllPatients = () => {
               placeholder="Name, Phone, UID"
             />
 
-            <div className="mb-4 relative">
-              <button
-                onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-                className="px-3 py-1 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
-              >
-                <span>{categoryFilter}</span>
-                <IoIosArrowDown />
-              </button>
-              {categoryDropdownOpen && (
-                <div className="absolute mt-2 bg-white border rounded shadow text-sm z-50">
-                  {categoryOptions.map((category) => (
-                    <button
-                      key={category}
-                      className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
-                        categoryFilter === category ? "bg-gray-200" : ""
-                      }`}
-                      onClick={() => {
-                        setCategoryFilter(category);
-                        setCategoryDropdownOpen(false);
-                      }}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Removed redundant category dropdown; capsules above control category */}
 
             <GenericTable
               columns={columns}
               data={filteredPatients}
               loading={loading}
               loadingRows={10}
+              sortable
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
               renderCell={(row, accessor) => {
                 if (accessor === "category") {
                   return (
@@ -303,8 +344,21 @@ const AllPatients = () => {
               <div className="text-center text-gray-500 py-8">Data Not Found</div>
             )}
 
-            {/* Always render Pagination, even if only one page */}
-            <div className="flex justify-center mt-4">
+            {/* Rows per page selector + Pagination */}
+            <div className="flex justify-between items-center mt-4">
+              <div className="flex items-center gap-2 text-sm">
+                <label htmlFor="ap-pageSize" className="text-gray-600">Rows per page:</label>
+                <select
+                  id="ap-pageSize"
+                  value={pagination.limit}
+                  onChange={e => setPagination(prev => ({ ...prev, page: 1, limit: Number(e.target.value) }))}
+                  className="border rounded px-2 py-1"
+                >
+                  {[7, 10, 25, 50].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
               <Pagination
                 currentPage={pagination.page}
                 totalPages={Math.max(1, totalPages)}
