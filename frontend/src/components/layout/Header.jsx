@@ -23,7 +23,25 @@ const Header = () => {
 
         const res = await axiosInstance.get(`/doctor/${doctorId}`);
         if (res.data && res.data.doctor && res.data.doctor.avatar) {
-          setProfilePicture(res.data.doctor.avatar);
+          const normalizeUrl = (url) => {
+            try {
+              const apiOrigin = new URL(axiosInstance.defaults.baseURL).origin;
+              const resolved = new URL(url, apiOrigin);
+              const pageIsHttps = window.location.protocol === 'https:';
+              // If avatar points to localhost in prod, swap to API origin
+              if (resolved.hostname.includes('localhost') && !window.location.hostname.includes('localhost')) {
+                return `${apiOrigin}${resolved.pathname}`;
+              }
+              // Enforce https when page is https
+              if (pageIsHttps && resolved.protocol !== 'https:') {
+                return `https://${resolved.host}${resolved.pathname}`;
+              }
+              return resolved.href;
+            } catch (e) {
+              return url;
+            }
+          };
+          setProfilePicture(normalizeUrl(res.data.doctor.avatar));
         }
       } catch (error) {
         console.error('Error fetching profile picture:', error);

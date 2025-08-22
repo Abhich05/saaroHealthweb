@@ -236,8 +236,25 @@ const Settings = () => {
                 
                 // Set avatar if available
                 if (profileData.avatar) {
-                    setAvatarPreview(profileData.avatar);
-                    setAvatarFileName(profileData.avatar.split('/').pop() || 'profile.jpg');
+                    const normalizeUrl = (url) => {
+                        try {
+                            const apiOrigin = new URL(axiosInstance.defaults.baseURL).origin;
+                            const resolved = new URL(url, apiOrigin);
+                            const pageIsHttps = window.location.protocol === 'https:';
+                            if (resolved.hostname.includes('localhost') && !window.location.hostname.includes('localhost')) {
+                                return `${apiOrigin}${resolved.pathname}`;
+                            }
+                            if (pageIsHttps && resolved.protocol !== 'https:') {
+                                return `https://${resolved.host}${resolved.pathname}`;
+                            }
+                            return resolved.href;
+                        } catch (e) {
+                            return url;
+                        }
+                    };
+                    const safeAvatar = normalizeUrl(profileData.avatar);
+                    setAvatarPreview(safeAvatar);
+                    setAvatarFileName(safeAvatar.split('/').pop() || 'profile.jpg');
                 }
                 // load OPD locations if available
                 if (profileData.opdLocations && Array.isArray(profileData.opdLocations) && profileData.opdLocations.length > 0) {
