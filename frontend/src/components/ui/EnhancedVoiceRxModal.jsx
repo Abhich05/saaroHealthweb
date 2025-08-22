@@ -1,3 +1,11 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Modal from './GenericModal';
+import Button from './Button';
+import { FiMic, FiStopCircle, FiPlay, FiPause, FiSave, FiEdit3, FiPrinter, FiDownload } from 'react-icons/fi';
+import { FaMicrophone } from 'react-icons/fa';
+import voiceService from '../../api/voiceService';
+import '../../styles/voicerx-brand.css';
+
 // Utility: wrap a promise with a timeout to prevent indefinite waiting
 const withTimeout = (promise, ms = 6000, label = 'operation') => {
   let timer;
@@ -6,14 +14,6 @@ const withTimeout = (promise, ms = 6000, label = 'operation') => {
   });
   return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
 };
-
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import Modal from './GenericModal';
-import Button from './Button';
-import { FiMic, FiStopCircle, FiPlay, FiPause, FiSave, FiEdit3, FiPrinter, FiDownload } from 'react-icons/fi';
-import { FaMicrophone } from 'react-icons/fa';
-import voiceService from '../../api/voiceService';
-import '../../styles/voicerx-brand.css';
 
 /**
  * Enhanced VoiceRx Modal - Integrates the standalone voicerx system with brand colors
@@ -547,6 +547,17 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
   const processWithBackendService = async () => {
     // capture processing id to discard late results from earlier sessions
     const pid = ++processingIdRef.current;
+    // Fail-safe: ensure we never remain stuck on processing
+    let failSafeCleared = false;
+    const failSafeTimer = setTimeout(() => {
+      if (pid !== processingIdRef.current || failSafeCleared) return;
+      console.warn('[VoiceRx] Fail-safe triggered: forcing local generation after 10s');
+      try {
+        generateStructuredForm();
+      } finally {
+        setCurrentStep('generated');
+      }
+    }, 10000);
     if (!audioBlob) {
       // No audio blob available: build a local structured form from current state
       console.debug('[VoiceRx] No audioBlob; using generateStructuredForm fallback');
@@ -705,6 +716,11 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
       console.error('[VoiceRx] Backend processing failed:', error);
       generateStructuredForm();
     } finally {
+      // Clear fail-safe if this run is still the active one
+      if (pid === processingIdRef.current) {
+        failSafeCleared = true;
+        clearTimeout(failSafeTimer);
+      }
       if (pid !== processingIdRef.current) return; // stale run, abort applying state
       console.debug('[VoiceRx] autoFields length:', (autoFields || []).length);
       // If backend didn't yield structure, try server-side parse-text first (uses same parser as ASR path)
@@ -789,26 +805,18 @@ const EnhancedVoiceRxModal = ({ isOpen, onClose, onApply, doctorId, patientId })
 
   // Generate structured form locally
   const generateStructuredForm = () => {
-    const s = extractSymptoms(transcript);
-    const m = extractMedications(transcript);
-    const i = extractInstructions(transcript);
+    const { fields, parts } = buildFieldsFromTranscript(transcript);
     setGeneratedForm({
       patientInfo: { 
         name: patientInfo.name || 'Patient', 
         age: patientInfo.age || '', 
         gender: patientInfo.gender || '' 
       },
-      ...(s && s.length ? { symptoms: s } : {}),
-      ...(m && m.length ? { medications: m } : {}),
-      ...(i && i.length ? { instructions: i } : {})
+      ...(parts && parts.symptoms && parts.symptoms.length ? { symptoms: parts.symptoms } : {}),
+      ...(parts && parts.medications && parts.medications.length ? { medications: parts.medications } : {}),
+      ...(parts && parts.instructions && parts.instructions.length ? { instructions: parts.instructions } : {})
     });
-    setAutoFields(buildAutoFields({
-      patient_name: patientInfo.name || 'Patient',
-      symptoms: prescriptionData.symptoms || [],
-      medications: prescriptionData.medications || [],
-      investigations: prescriptionData.investigations || [],
-      instructions: prescriptionData.instructions || []
-    }));
+    setAutoFields(Array.isArray(fields) ? fields : []);
     generatePrescription();
     setCurrentStep('generated');
   };
