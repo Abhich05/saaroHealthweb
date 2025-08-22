@@ -70,6 +70,21 @@ const CreateRx = () => {
   // Track when component mounted to suppress transient errors on initial load
   const mountedAtRef = useRef(Date.now());
 
+  // Simple SWR cache (sessionStorage)
+  const cacheGet = (key) => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      // basic shape validation
+      if (!obj || !Array.isArray(obj.patients)) return null;
+      return obj;
+    } catch { return null; }
+  };
+  const cacheSet = (key, value) => {
+    try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
+  };
+
   // Sorting state (declare early so it's available in fetchPatients)
   const [sortBy, setSortBy] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -106,6 +121,10 @@ const CreateRx = () => {
     }
     const controller = new AbortController();
     requestCtrlRef.current = controller;
+    // Early abort to avoid long loaders (axios also has 10s timeout)
+    const abortId = setTimeout(() => {
+      try { controller.abort(); } catch {}
+    }, 8000);
     setLoading(true);
     setError("");
     try {
@@ -113,6 +132,16 @@ const CreateRx = () => {
       const params = { page: pagination.page, limit: pagination.limit };
       if (searchTerm) params.searchQuery = searchTerm;
       if (sortBy) { params.sortBy = sortBy; params.sortDir = sortDir || 'asc'; }
+      // Prefill instantly from cache (stale-while-revalidate)
+      const cacheKey = `patients:${doctorId}:${params.page}:${params.limit}:${params.searchQuery || ''}:${params.sortBy || ''}:${params.sortDir || ''}`;
+      const cached = cacheGet(cacheKey);
+      if (cached && mappedData.length === 0) {
+        setRxData(cached.patients);
+        setMappedData(cached.patients.map(mapPatientToTableRow));
+        setPagination(prev => ({ ...prev, total: cached.total || cached.patients.length }));
+        // hide loader while revalidating in background
+        setLoading(false);
+      }
       const res = await axiosInstance.get(`/patient/get-all/${doctorId}`, { params, signal: controller.signal });
       const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
       setRxData(patients);
@@ -121,6 +150,8 @@ const CreateRx = () => {
         ...prev,
         total: res.data.pagination?.totalPatients || patients.length
       }));
+      // Write cache
+      cacheSet(cacheKey, { patients, total: res.data.pagination?.totalPatients || patients.length, ts: Date.now() });
       const t1 = performance.now();
       console.debug('[metrics] fetchPatients duration(ms):', Math.round(t1 - t0), { page: pagination.page, limit: pagination.limit, search: !!searchTerm });
     } catch (err) {
@@ -155,6 +186,7 @@ const CreateRx = () => {
         console.warn('[metrics] fetchPatients error', { status, attempt });
       }
     } finally {
+      try { clearTimeout(abortId); } catch {}
       if (isMountedRef.current) setLoading(false);
     }
   };

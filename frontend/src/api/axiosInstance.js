@@ -8,7 +8,7 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saarohealthweb-1.o
 const axiosInstance = axios.create({
   baseURL,
   withCredentials: false, // Disable credentials for CORS
-  timeout: 15000, // 15 second timeout
+  timeout: 10000, // 10 second timeout to prevent long loaders
   headers: {
     'Accept': 'application/json',
     'Content-Type': 'application/json'

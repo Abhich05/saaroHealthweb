@@ -83,6 +83,20 @@ const AllPatients = () => {
   // Filtered patients by category
   const filteredPatients = patients.filter(p => categoryFilter === 'All' || p.category === categoryFilter);
 
+  // Simple SWR cache (sessionStorage)
+  const cacheGet = (key) => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !Array.isArray(obj.patients)) return null;
+      return obj;
+    } catch { return null; }
+  };
+  const cacheSet = (key, value) => {
+    try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
+  };
+
   // Debounce search
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   useEffect(() => {
@@ -186,17 +200,32 @@ const AllPatients = () => {
     if (requestCtrlRef.current) { try { requestCtrlRef.current.abort(); } catch {} }
     const controller = new AbortController();
     requestCtrlRef.current = controller;
+    // Early abort in ~8s to avoid long loaders (axios has 10s timeout)
+    const abortId = setTimeout(() => {
+      try { controller.abort(); } catch {}
+    }, 8000);
     setLoading(true);
     setError(null);
     try {
       const params = { page: pagination.page, limit: pagination.limit };
       if (debouncedSearchTerm) params.searchQuery = debouncedSearchTerm;
       if (sortBy) { params.sortBy = sortBy; params.sortDir = sortDir || 'asc'; }
+      // Prefill from cache to avoid showing loader
+      const cacheKey = `patients:${doctorId}:${params.page}:${params.limit}:${params.searchQuery || ''}:${params.sortBy || ''}:${params.sortDir || ''}`;
+      const cached = cacheGet(cacheKey);
+      if (cached && patients.length === 0) {
+        if (!isMountedRef.current) return;
+        setPatients(cached.patients.map(mapPatientToTableRow));
+        setPagination(prev => ({ ...prev, totalPatients: cached.total || cached.patients.length }));
+        setLoading(false); // hide loader while revalidating
+      }
       const res = await axiosInstance.get(`/patient/get-all/${doctorId}`, { params, signal: controller.signal });
       const list = Array.isArray(res.data.patient) ? res.data.patient : [];
       if (!isMountedRef.current) return;
       setPatients(list.map(mapPatientToTableRow));
       setPagination(prev => ({ ...prev, totalPatients: res.data.pagination?.totalPatients || list.length }));
+      // Write cache
+      cacheSet(cacheKey, { patients: list, total: res.data.pagination?.totalPatients || list.length, ts: Date.now() });
     } catch (e) {
       const code = e?.code || e?.name;
       const msg = (e?.message || '').toLowerCase();
@@ -221,7 +250,10 @@ const AllPatients = () => {
       const justMounted = Date.now() - mountedAtRef.current < 800;
       // Do not wipe existing data; only show error banner if we have nothing to show and not in initial window
       setError(prev => ((patients && patients.length > 0) || justMounted ? prev : "Failed to fetch patients. Please try again."));
-    } finally { if (isMountedRef.current) setLoading(false); }
+    } finally {
+      try { clearTimeout(abortId); } catch {}
+      if (isMountedRef.current) setLoading(false);
+    }
   };
 
   useEffect(() => { fetchPatients(); }, [doctorId, pagination.page, pagination.limit, debouncedSearchTerm, sortBy, sortDir]);
