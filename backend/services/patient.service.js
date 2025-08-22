@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Patient = require('../models/patient');
 const DoctorPatient = require('../models/doctorPatient');
 const { generatePatientUid, getAccessToken } = require('../utils/helpers');
@@ -242,7 +243,7 @@ const getPatientById = async ( patientId ) => {
   }
 }
 
-const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "" ) => {
+const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "", sortBy, sortDir ) => {
   try {
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 25;
@@ -269,18 +270,52 @@ const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "" 
       patientId: { $in: matchingPatientIds },
     });
 
-    const patients = await DoctorPatient.find({
-      doctorId,
-      patientId: { $in: matchingPatientIds },
-    })
-      .populate('patientId')
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(limitNumber);
+    // Determine sort field and direction
+    const sortMap = {
+      uid: 'patient.uid',
+      name: 'patient.fullName',
+      phone: 'patient.phoneNumber',
+      lastVisit: 'updatedAt', // from DoctorPatient timestamps
+      category: 'patient.category',
+    };
+    const resolvedSortField = sortMap[sortBy] || 'updatedAt';
+    const resolvedSortDir = String(sortDir).toLowerCase() === 'asc' ? 1 : -1;
+
+    // Aggregation pipeline to join Patient and sort on joined fields
+    const docObjectId = mongoose.Types.ObjectId.isValid(doctorId)
+      ? new mongoose.Types.ObjectId(doctorId)
+      : doctorId;
+    const pipeline = [
+      { $match: { doctorId: docObjectId, patientId: { $in: matchingPatientIds } } },
+      {
+        $lookup: {
+          from: 'patients',
+          localField: 'patientId',
+          foreignField: '_id',
+          as: 'patient',
+        },
+      },
+      { $unwind: '$patient' },
+      { $sort: { [resolvedSortField]: resolvedSortDir, _id: 1 } },
+      { $skip: skip },
+      { $limit: limitNumber },
+      // Preserve original response shape: expose joined patient under patientId
+      {
+        $project: {
+          _id: 1,
+          doctorId: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          patientId: '$patient',
+        },
+      },
+    ];
+
+    const aggResults = await DoctorPatient.aggregate(pipeline);
 
     return {
       statusCode: 200,
-      patients,
+      patients: aggResults,
       pagination: {
         currentPage: pageNumber,
         totalPages: Math.ceil(totalPatients / limitNumber),

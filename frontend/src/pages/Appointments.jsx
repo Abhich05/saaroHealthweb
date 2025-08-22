@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
+
 import { FiPlus } from "react-icons/fi";
 import StatBox2 from "../components/ui/StatBox2";
 import Sidebar from "../components/layout/SideBar";
@@ -8,6 +9,7 @@ import Modal from "../components/ui/GenericModal";
 import axiosInstance from '../api/axiosInstance';
 import { DoctorIdContext } from '../App';
 import Loading from "../components/ui/Loading";
+import { cacheGet, cacheSet, isTransientError, makeCacheKey, sleep } from "../utils/fetchUtils";
 
 const AppointmentsDashboard = () => {
   const [appointments, setAppointments] = useState([]);
@@ -48,6 +50,12 @@ const AppointmentsDashboard = () => {
 
   const doctorId = useContext(DoctorIdContext);
 
+  // Refs and helpers for robust fetch
+  const isMountedRef = useRef(false);
+  const requestCtrlRef = useRef(null);
+  const mountedAtRef = useRef(Date.now());
+
+
   // --- FIX: Define stats for StatBox2 ---
   const [stats, setStats] = useState([
     {
@@ -63,6 +71,44 @@ const AppointmentsDashboard = () => {
       value: 0,
     },
   ]);
+
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; try { requestCtrlRef.current?.abort(); } catch {} } }, []);
+
+  const fetchAppointments = async (attempt = 0) => {
+    if (!doctorId) return;
+    if (requestCtrlRef.current) { try { requestCtrlRef.current.abort(); } catch {} }
+    const controller = new AbortController();
+    requestCtrlRef.current = controller;
+    const abortId = setTimeout(() => { try { controller.abort(); } catch {} }, 8000);
+    if (isMountedRef.current) { setLoading(true); if (Date.now() - mountedAtRef.current > 800) setError(""); }
+    try {
+      const cacheKey = makeCacheKey('apts', [doctorId]);
+      const cached = cacheGet(cacheKey);
+      if (cached && appointments.length === 0) {
+        if (!isMountedRef.current) return;
+        setAppointments(cached.items.map(mapAppointmentToDisplay));
+        setLoading(false);
+      }
+      const res = await axiosInstance.get(`/appointment/${doctorId}/get-upcoming-appointments`, { signal: controller.signal });
+      const items = Array.isArray(res.data.appointments) ? res.data.appointments : [];
+      if (!isMountedRef.current) return;
+      setAppointments(items.map(mapAppointmentToDisplay));
+      cacheSet(cacheKey, { items, ts: Date.now() });
+    } catch (err) {
+      const isAbort = err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || /aborted|canceled/i.test(err?.message || '');
+      if (isAbort) return;
+      if (isTransientError(err) && attempt < 2) {
+        await sleep(300 * Math.pow(2, attempt));
+        return fetchAppointments(attempt + 1);
+      }
+      if (isMountedRef.current) setError('Failed to fetch appointments. Please try again.');
+    } finally {
+      clearTimeout(abortId);
+      if (isMountedRef.current) setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAppointments(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [doctorId]);
 
   // Helper to map appointment data for display
   const mapAppointmentToDisplay = (apt) => {
@@ -86,22 +132,6 @@ const AppointmentsDashboard = () => {
       phoneNumber: patientData.phoneNumber || a.phoneNumber || '',
     };
   };
-
-  useEffect(() => {
-    if (!doctorId) return;
-    setLoading(true);
-    setError("");
-    axiosInstance.get(`/appointment/${doctorId}/get-upcoming-appointments`)
-      .then(res => {
-        const appointments = Array.isArray(res.data.appointments) ? res.data.appointments : [];
-        setAppointments(appointments.map(mapAppointmentToDisplay));
-      })
-      .catch(() => {
-        setAppointments([]);
-        setError("Failed to fetch appointments. Please try again.");
-      })
-      .finally(() => setLoading(false));
-  }, [doctorId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -230,15 +260,7 @@ const AppointmentsDashboard = () => {
     axiosInstance.put(`/appointment/${doctorId}/${selectedAppointment.id}`, payload)
       .then(() => {
         // Refresh appointments list
-        axiosInstance.get(`/appointment/${doctorId}/get-upcoming-appointments`)
-          .then(res => {
-            const appointments = Array.isArray(res.data.appointments) ? res.data.appointments : [];
-            setAppointments(appointments.map(mapAppointmentToDisplay));
-          })
-          .catch(() => {
-            setAppointments([]);
-            setError("Failed to fetch appointments after updating.");
-          });
+        fetchAppointments();
         setIsEditModalOpen(false);
         setSelectedAppointment(null);
       })
@@ -287,15 +309,7 @@ const AppointmentsDashboard = () => {
     
     axiosInstance.post(`/appointment/${doctorId}`, payload)
       .then(() => {
-        axiosInstance.get(`/appointment/${doctorId}/get-upcoming-appointments`)
-          .then(res => {
-            const appointments = Array.isArray(res.data.appointments) ? res.data.appointments : [];
-            setAppointments(appointments.map(mapAppointmentToDisplay));
-          })
-          .catch(() => {
-            setAppointments([]);
-            setError("Failed to fetch appointments after adding.");
-          });
+        fetchAppointments();
         setFormData({
           name: "",
           phone: "",
@@ -466,15 +480,7 @@ const AppointmentsDashboard = () => {
     fetchSharedBookings();
   }, [doctorId]);
 
-  // Remove full page loading
-  if (error) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="bg-red-100 text-red-700 p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-      </div>
-    </div>
-  );
+  // Inline error banner will be shown in the page content
 
   return (
     <div className="flex h-screen">
@@ -487,6 +493,11 @@ const AppointmentsDashboard = () => {
               {/* Left Section */}
               <div className="w-2/3">
                 <h1 className="text-3xl leading-10 font-semibold mb-4">Appointments</h1>
+                {error ? (
+                  <div className="bg-red-100 text-red-700 p-3 rounded border border-red-200 mb-2">
+                    {error}
+                  </div>
+                ) : null}
                 <h2 className="text-lg text-700 font-semibold mb-2">Latest Appointments</h2>
                 <div className="bg-gray-50 rounded-xl p-4 space-y-4">
                   {loading ? (

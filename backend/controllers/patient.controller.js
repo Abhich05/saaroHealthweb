@@ -121,9 +121,9 @@ const getPatientById = async (req, res) => {
 const getAllPatients = async (req, res) => {
   try {
     const { doctorId } = req.params;
-    const { page, limit, searchQuery } = req.query;
+    const { page, limit, searchQuery, sortBy, sortDir } = req.query;
 
-    const patients = await patientService.getAllPatients(doctorId, page, limit, searchQuery);
+    const patients = await patientService.getAllPatients(doctorId, page, limit, searchQuery, sortBy, sortDir);
 
     res
       .status(patients.statusCode)

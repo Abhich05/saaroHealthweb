@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
@@ -10,6 +10,7 @@ import axiosInstance from '../api/axiosInstance';
 import { DoctorIdContext } from '../App';
 import { useContext } from 'react';
 import Loading from "../components/ui/Loading";
+import { cacheGet, cacheSet, isTransientError, makeCacheKey, sleep } from "../utils/fetchUtils";
 
 const DischargeSummaryForm = () => {
   const location = useLocation();
@@ -24,25 +25,66 @@ const DischargeSummaryForm = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const isMountedRef = useRef(false);
+  const requestCtrlRef = useRef(null);
+  const mountedAtRef = useRef(Date.now());
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // using shared SWR and error utilities
 
   // Helper to flatten patient objects
   const mapPatient = (patient) => patient.patientId ? patient.patientId : patient;
 
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; try { requestCtrlRef.current?.abort(); } catch {} } }, []);
+
+  // debounce searchTerm for server-side search
   useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 350);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
+
+  const fetchPatients = async (attempt = 0) => {
     if (!doctorId) return;
-    setLoading(true);
-    setError("");
-    axiosInstance.get(`/patient/get-all/${doctorId}`)
-      .then(res => {
-        const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
-        setAllPatients(patients.map(mapPatient));
-      })
-      .catch(() => {
-        setAllPatients([]);
-        setError("Failed to fetch patients. Please try again.");
-      })
-      .finally(() => setLoading(false));
-  }, [doctorId]);
+    if (requestCtrlRef.current) { try { requestCtrlRef.current.abort(); } catch {} }
+    const controller = new AbortController();
+    requestCtrlRef.current = controller;
+    const abortId = setTimeout(() => { try { controller.abort(); } catch {} }, 8000);
+    if (isMountedRef.current) { setLoading(true); if (Date.now() - mountedAtRef.current > 800) setError(""); }
+    try {
+      const params = {};
+      if (debouncedSearch) params.searchQuery = debouncedSearch;
+      // Use small limit since this is a dropdown
+      params.page = 1; params.limit = 20;
+      const cacheKey = makeCacheKey('patients', [doctorId, params.page, params.limit, params.searchQuery || '']);
+      const cached = cacheGet(cacheKey);
+      if (cached && allPatients.length === 0) {
+        if (!isMountedRef.current) return;
+        setAllPatients(cached.patients.map(mapPatient));
+        setLoading(false);
+      }
+      const res = await axiosInstance.get(`/patient/get-all/${doctorId}`, { params, signal: controller.signal });
+      const patients = Array.isArray(res.data.patient) ? res.data.patient : [];
+      if (!isMountedRef.current) return;
+      setAllPatients(patients.map(mapPatient));
+      cacheSet(cacheKey, { patients, ts: Date.now() });
+    } catch (err) {
+      const isAbort = err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || /aborted|canceled/i.test(err?.message || '');
+      if (isAbort) return;
+      if (isTransientError(err) && attempt < 2) {
+        await sleep(300 * Math.pow(2, attempt));
+        return fetchPatients(attempt + 1);
+      }
+      if (isMountedRef.current) setError('Failed to fetch patients. Please try again.');
+    } finally {
+      clearTimeout(abortId);
+      if (isMountedRef.current) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, debouncedSearch]);
 
   // Pre-fill form if editing an existing record
   useEffect(() => {
@@ -188,15 +230,7 @@ const DischargeSummaryForm = () => {
     navigate('/ipd');
   };
 
-  // Remove full page loading
-  if (error) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="bg-red-100 text-red-700 p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-      </div>
-    </div>
-  );
+  // Inline error banner instead of full-screen block
 
   return (
     <div className="flex h-screen">
@@ -207,6 +241,11 @@ const DischargeSummaryForm = () => {
           <div className="max-w-[90%] mx-auto py-8 space-y-10">
             <div className="mx-auto">
               <h1 className="text-2xl font-semibold mb-6">Discharge Summary</h1>
+              {error ? (
+                <div className="bg-red-100 text-red-700 p-3 rounded border border-red-200 mb-4">
+                  {error}
+                </div>
+              ) : null}
               <div className="relative w-full mb-4">
                 <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
