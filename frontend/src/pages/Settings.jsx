@@ -1,4 +1,5 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
+import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import GenericTable from '../components/ui/GenericTable';
 import TabHeader from '../components/ui/TabHeader';
 import Sidebar from "../components/layout/SideBar";
@@ -10,6 +11,7 @@ import { UserContext, DoctorNameContext } from '../App';
 import axiosInstance from '../api/axiosInstance';
 import { toast } from 'react-toastify';
 import SettingsSkeletonLoader from '../components/ui/SettingsSkeletonLoader';
+import MapPicker from '../components/maps/MapPicker';
  // <-- your existing Pagination component
 
 const reviewColumns = [
@@ -58,6 +60,36 @@ const Settings = () => {
         active: true,
         mapLocation: null // reserved for Google Maps coords/address
     }]);
+
+    // Map picker modal state
+    const [mapPickerOpen, setMapPickerOpen] = useState(false);
+    const [mapPickerLocId, setMapPickerLocId] = useState(null);
+
+    // OPD validation state (ids of invalid cards)
+    const [invalidOpdIds, setInvalidOpdIds] = useState([]);
+
+    // Inline map open state per card
+    const [openMapIds, setOpenMapIds] = useState([]);
+
+    // Load Google Maps API (for inline maps)
+    const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const { isLoaded: isMapLibLoaded, loadError: mapLibError } = useLoadScript({
+        googleMapsApiKey: mapsApiKey || '',
+    });
+
+    const validateOpdLocations = () => {
+        const invalidIds = opdLocations.filter(loc => {
+            const hasDay = Object.values(loc.days || {}).some(Boolean);
+            const validTimes = !!loc.startTime && !!loc.endTime && loc.startTime < loc.endTime;
+            return !(hasDay && validTimes);
+        }).map(l => l.id);
+        setInvalidOpdIds(invalidIds);
+        if (invalidIds.length) {
+            toast.error(`Please select days and valid timings for ${invalidIds.length} OPD location(s).`);
+            return false;
+        }
+        return true;
+    };
 
     // Password change state
     const [currentPassword, setCurrentPassword] = useState('');
@@ -507,20 +539,20 @@ const Settings = () => {
                                         </div>
 
                                         {opdLocations.map((loc, idx) => (
-                                            <div key={loc.id} className="p-4 border rounded-lg bg-white">
+                                            <div key={loc.id} className={`p-4 border rounded-lg bg-white ${invalidOpdIds.includes(loc.id) ? 'border-red-300' : ''}`}>
+                                                {/* Header row */}
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-sm font-semibold text-[#120F1A]">OPD Slot {idx + 1}</span>
+                                                    <label className="flex items-center gap-2 text-sm">
+                                                        <span>Active</span>
+                                                        <input type="checkbox" checked={loc.active} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, active: e.target.checked } : p))} />
+                                                    </label>
+                                                </div>
+
                                                 <div className="flex justify-between items-start gap-4">
                                                     <div className="flex-1">
-                                                        <label className="block text-sm font-medium">Clinic Name</label>
-                                                        <input value={loc.clinicName} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, clinicName: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <label className="block text-sm font-medium mt-3">City</label>
-                                                        <input value={loc.city} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, city: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <label className="block text-sm font-medium mt-3">Full Address</label>
-                                                        <input value={loc.address} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, address: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <div className="mt-3">
-                                                            <label className="block text-sm font-medium">Days</label>
+                                                        <div className="mt-0">
+                                                            <label className="block text-sm font-medium">Active Days</label>
                                                             <div className="flex flex-wrap gap-2 mt-2">
                                                                 {Object.keys(loc.days).map(day => (
                                                                     <label key={day} className={`px-3 py-1 rounded-full cursor-pointer ${loc.days[day] ? 'bg-[#5e3bea] text-white' : 'bg-[#EBE8F2]'}`}>
@@ -529,32 +561,73 @@ const Settings = () => {
                                                                     </label>
                                                                 ))}
                                                             </div>
+                                                            {invalidOpdIds.includes(loc.id) && !Object.values(loc.days || {}).some(Boolean) && (
+                                                                <p className="text-xs text-red-500 mt-1">Select at least one day.</p>
+                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    <div className="w-64">
-                                                        <label className="block text-sm font-medium">Start Time</label>
-                                                        <input type="time" value={loc.startTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, startTime: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <label className="block text-sm font-medium mt-3">End Time</label>
-                                                        <input type="time" value={loc.endTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, endTime: e.target.value } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <label className="block text-sm font-medium mt-3">Time Slot (mins)</label>
-                                                        <input type="number" min={1} value={loc.slotMins} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, slotMins: Number(e.target.value) } : p))} className="w-full border rounded p-2 mt-1" />
-
-                                                        <div className="mt-3 flex items-center justify-between">
-                                                            <label className="text-sm">Active</label>
-                                                            <input type="checkbox" checked={loc.active} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, active: e.target.checked } : p))} />
+                                                    <div className="w-72">
+                                                        <label className="block text-sm font-medium">Timings</label>
+                                                        <div className="mt-1 flex items-center gap-2">
+                                                            <input type="time" value={loc.startTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, startTime: e.target.value } : p))} className={`w-full border rounded p-2 ${invalidOpdIds.includes(loc.id) && !(loc.startTime && loc.endTime && loc.startTime < loc.endTime) ? 'border-red-300' : ''}`} />
+                                                            <span className="text-gray-500">-</span>
+                                                            <input type="time" value={loc.endTime} onChange={(e) => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, endTime: e.target.value } : p))} className={`w-full border rounded p-2 ${invalidOpdIds.includes(loc.id) && !(loc.startTime && loc.endTime && loc.startTime < loc.endTime) ? 'border-red-300' : ''}`} />
                                                         </div>
 
-                                                        <div className="mt-3 flex gap-2">
+                                                        <div className="mt-3 flex flex-wrap items-center gap-2">
                                                             <button onClick={() => setOpdLocations(prev => prev.filter(p => p.id !== loc.id))} className="px-3 py-1 bg-red-500 text-white rounded">Remove</button>
+                                                            <button onClick={() => setOpdLocations(prev => {
+                                                                const copy = { ...loc, id: crypto.randomUUID() };
+                                                                return [...prev, copy];
+                                                            })} className="px-3 py-1 bg-gray-100 rounded">Duplicate</button>
                                                             <button onClick={() => {
-                                                                // placeholder for picking map location
-                                                                const fakeCoord = { lat: 0, lng: 0 };
-                                                                setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: fakeCoord } : p));
-                                                            }} className="px-3 py-1 bg-gray-200 rounded">Pick on Map</button>
+                                                                setOpenMapIds(prev => prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]);
+                                                            }} className="px-3 py-1 bg-gray-200 rounded">{openMapIds.includes(loc.id) ? 'Hide Map' : 'Show Map'}</button>
+                                                            <button
+                                                                onClick={() => setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: null } : p))}
+                                                                className="px-3 py-1 bg-gray-100 rounded"
+                                                                disabled={!loc.mapLocation}
+                                                            >Clear Map</button>
+                                                            {loc.mapLocation && (
+                                                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Map set</span>
+                                                            )}
                                                         </div>
+                                                        {openMapIds.includes(loc.id) && (
+                                                            <div className="mt-3 border rounded overflow-hidden" style={{ height: 280 }}>
+                                                                {!mapsApiKey ? (
+                                                                    <div className="h-full w-full bg-gray-50 flex items-center justify-center text-sm text-gray-600">
+                                                                        Map demo — API key not set. Add VITE_GOOGLE_MAPS_API_KEY to show interactive map.
+                                                                    </div>
+                                                                ) : !isMapLibLoaded ? (
+                                                                    <div className="h-full flex items-center justify-center text-sm text-gray-500">Loading map…</div>
+                                                                ) : mapLibError ? (
+                                                                    <div className="h-full flex items-center justify-center text-sm text-red-600">Failed to load map</div>
+                                                                ) : (
+                                                                    <GoogleMap
+                                                                        mapContainerStyle={{ width: '100%', height: '100%' }}
+                                                                        center={loc.mapLocation || { lat: 28.6139, lng: 77.2090 }}
+                                                                        zoom={14}
+                                                                        onClick={(e) => {
+                                                                            const coords = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                                                                            setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: coords } : p));
+                                                                        }}
+                                                                        options={{ streetViewControl: false, mapTypeControl: false }}
+                                                                    >
+                                                                        { (loc.mapLocation) && (
+                                                                            <Marker
+                                                                                position={loc.mapLocation}
+                                                                                draggable={true}
+                                                                                onDragEnd={(e) => {
+                                                                                    const coords = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                                                                                    setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: coords } : p));
+                                                                                }}
+                                                                            />
+                                                                        )}
+                                                                    </GoogleMap>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -562,11 +635,14 @@ const Settings = () => {
 
                                         <div className="flex gap-3 mt-4">
                                             <button onClick={async () => {
+                                                // Validate first
+                                                if (!validateOpdLocations()) return;
                                                 // Save OPD locations to profile (doctor)
                                                 try {
                                                     const doctorId = localStorage.getItem('doctorId');
                                                     await axiosInstance.put(`/doctor/${doctorId}/opd-locations`, { opdLocations });
                                                     toast.success('OPD locations saved');
+                                                    setInvalidOpdIds([]);
                                                 } catch (err) {
                                                     console.error(err);
                                                     toast.error('Failed to save OPD locations');
@@ -578,12 +654,13 @@ const Settings = () => {
                                                 setOpdLocations([{
                                                     id: crypto.randomUUID(), clinicName: '', city: '', address: '', days: { Mon: false, Tue: false, Wed: false, Thu: false, Fri: false, Sat: false, Sun: false }, startTime: '09:00', endTime: '17:00', slotMins: 10, active: true, mapLocation: null
                                                 }]);
+                                                setInvalidOpdIds([]);
                                             }} className="px-4 py-2 bg-gray-200 rounded">Reset</button>
                                         </div>
                                     </div>
 
-                                    {/* Toggle */}
-                                    <div className="mt-6 bg-[#FAFAFA] rounded-md p-4 flex justify-between items-center">
+                                    {/* Removed stray global Active toggle (hidden) */}
+                                    <div className="hidden mt-6 bg-[#FAFAFA] rounded-md p-4 flex justify-between items-center">
                                         <span className="font-medium text-[#120F1A] text-400">Active</span>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input type="checkbox" className="sr-only peer" />
@@ -833,6 +910,15 @@ const Settings = () => {
                         )}
                     </div>
                 </main>
+                <MapPicker
+                    isOpen={mapPickerOpen}
+                    onClose={() => setMapPickerOpen(false)}
+                    onSelect={(coords) => {
+                        setOpdLocations(prev => prev.map(p => p.id === mapPickerLocId ? { ...p, mapLocation: coords } : p));
+                        setMapPickerOpen(false);
+                    }}
+                    initialPosition={(opdLocations.find(l => l.id === mapPickerLocId)?.mapLocation) || { lat: 28.6139, lng: 77.2090 }}
+                />
             </div>
         </div>
     );
