@@ -1,4 +1,5 @@
 import React, { useState, useContext } from "react";
+
 import { FiSend, FiPaperclip, FiSearch } from "react-icons/fi";
 import Sidebar from "../components/layout/SideBar";
 import Header from "../components/layout/Header";
@@ -114,6 +115,18 @@ const Messages = () => {
   // 1. Add state for editing and copying messages
   const [editingIndex, setEditingIndex] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [copiedIndex, setCopiedIndex] = useState(null);
+
+  // Auto scroll to bottom on new messages
+  const messagesEndRef = React.useRef(null);
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, selectedContact]);
+
+  const formatDate = (ts) => {
+    const d = ts ? new Date(ts) : new Date();
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
 
   // 2. Mock WhatsApp API integration for sending messages
   const mockWhatsAppSend = (msg) => {
@@ -137,6 +150,12 @@ const Messages = () => {
   };
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
+    // brief feedback for user
+    const idx = typeof text === 'string' ? messages.findIndex(m => (m.content || m.message) === text) : null;
+    if (idx !== -1) {
+      setCopiedIndex(idx);
+      setTimeout(() => setCopiedIndex(null), 1000);
+    }
   };
 
   // 4. Update sendMessage to use mock WhatsApp API
@@ -213,7 +232,7 @@ const Messages = () => {
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     placeholder="Search by Name / UID / Role"
-className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 text-[#5e3bea] focus:outline-none text-sm"
+                    className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 text-[#5e3bea] focus:outline-none text-sm"
                   />
                 </div>
                 
@@ -268,6 +287,11 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
               <div className="flex-1 flex flex-col overflow-hidden">
                 {selectedContact ? (
                   <>
+                    {isPlaceholderWaba && (
+                      <div className="mx-8 mt-4 mb-0 p-3 rounded-lg bg-yellow-50 text-yellow-800 text-sm border border-yellow-200">
+                        Using placeholder WABA number. Set VITE_WABA_NUMBER in frontend/.env to enable WhatsApp messaging.
+                      </div>
+                    )}
                     <div className="flex flex-col items-center py-2 h-1/3">
                       <img
                         src={selectedContact.img || "/profile.png"}
@@ -323,12 +347,19 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                       ) : (
                         messages.map((msg, index) => {
                           const isDoctor = msg.sender === "doctor";
+                          const prev = messages[index - 1];
+                          const showDate = !prev || formatDate(prev?.timestamp) !== formatDate(msg?.timestamp);
                           return (
                             <div
                               key={index}
                               className={`flex items-end gap-2 mb-2 ${isDoctor ? "justify-end" : "justify-start"}`}
                               style={{ position: "relative" }}
                             >
+                              {showDate && (
+                                <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                  {formatDate(msg.timestamp)}
+                                </div>
+                              )}
                               {!isDoctor && (
                                 <img
                                   src={selectedContact.img || "/profile.png"}
@@ -338,7 +369,7 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                               )}
                               <div className="flex flex-col items-end max-w-lg w-fit">
                                 <div
-                                  className={`relative px-4 py-2 rounded-2xl text-sm shadow ${isDoctor
+                                  className={`group relative px-4 py-2 rounded-2xl text-sm shadow ${isDoctor
                                     ? "bg-[#DCF8C6] text-gray-900 self-end"
                                     : "bg-white text-gray-900 self-start border"
                                   }`}
@@ -360,12 +391,14 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                                   )}
                                   <span className="block text-[10px] text-gray-400 mt-1 text-right">{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
                                   {/* Hover actions */}
-                                  <div className="absolute top-0 right-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                                    <button className="text-xs text-blue-500" onClick={() => handleCopy(msg.content || msg.message)}>Copy</button>
+                                  <div className="absolute -top-6 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 items-center">
+                                    <button className="text-[11px] text-blue-600" onClick={() => handleCopy(msg.content || msg.message)}>
+                                      {copiedIndex === index ? 'Copied' : 'Copy'}
+                                    </button>
                                     {isDoctor && (
                                       <>
-                                        <button className="text-xs text-yellow-600" onClick={() => handleEdit(index)}>Edit</button>
-                                        <button className="text-xs text-red-500" onClick={() => handleDelete(index)}>Delete</button>
+                                        <button className="text-[11px] text-yellow-700" onClick={() => handleEdit(index)}>Edit</button>
+                                        <button className="text-[11px] text-red-600" onClick={() => handleDelete(index)}>Delete</button>
                                       </>
                                     )}
                                   </div>
@@ -382,6 +415,7 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                           );
                         })
                       )}
+                      <div ref={messagesEndRef} />
                     </div>
 
                     <div className="border-t p-4 flex items-center gap-2">
@@ -394,10 +428,11 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
                         <input
                           type="text"
                           placeholder="Type a message..."
-                          className="flex-1 p-2 pr-32 rounded bg-gray-200"
+                          className="flex-1 p-2 pr-32 rounded bg-gray-200 disabled:opacity-60"
                           value={message}
                           onChange={(e) => setMessage(e.target.value)}
                           onKeyDown={handleKeyDown}
+                          disabled={loading}
                         />
 
                         <div className="absolute right-2 flex items-center gap-2">
@@ -415,7 +450,8 @@ className="w-full pl-10 pr-10 py-2 border rounded-xl bg-[#c5c7c9] bg-opacity-20 
 
                       <button
                         onClick={sendMessage}
-                        className="bg-[#6B3DD6] text-white px-4 py-2 rounded flex items-center gap-1"
+                        className="bg-[#6B3DD6] text-white px-4 py-2 rounded flex items-center gap-1 disabled:opacity-60"
+                        disabled={loading || !message.trim()}
                       >
                         <FiSend /> Send
                       </button>
