@@ -58,7 +58,11 @@ const uploadAvatar = async (req, res) => {
         return res.status(400).json({ message: 'No file uploaded.' });
       }
 
-      const avatarUrl = `${process.env.SERVER_URL || 'https://saarohealthweb-1.onrender.com'}/public/avatars/${req.file.filename}`;
+      // Build absolute URL based on current request (supports proxies/CDNs)
+      const proto = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const baseUrl = `${proto}://${host}`;
+      const avatarUrl = `${baseUrl}/public/avatars/${req.file.filename}`;
       
       return res.status(200).json({
         message: 'Avatar uploaded successfully.',
