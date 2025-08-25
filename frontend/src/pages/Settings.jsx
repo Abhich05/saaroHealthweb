@@ -28,6 +28,13 @@ const reviewColumns = [
 const Settings = () => {
     const [activeTab, setActiveTab] = useState('profile');
     const [avatarPreview, setAvatarPreview] = useState(null);
+    // Camera capture modal state
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
+    const [cameraError, setCameraError] = useState('');
+    const [capturedDataUrl, setCapturedDataUrl] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [reviews, setReviews] = useState(reviewData);
     const [avatarFileName, setAvatarFileName] = useState('');
@@ -145,6 +152,31 @@ const Settings = () => {
 
     // Autocomplete refs per OPD card
     const autoRefs = useRef({});
+    // Map refs per OPD card to programmatically pan/zoom
+    const mapRefs = useRef({});
+    // Bootstrap current location once for inline maps
+    const [bootstrappedGeo, setBootstrappedGeo] = useState(false);
+
+    useEffect(() => {
+        // On first mount when maps are ready, set user's current location for any OPD without mapLocation
+        if (bootstrappedGeo) return;
+        if (!isMapLibLoaded) return;
+        if (!navigator.geolocation) return;
+        const hasEmpty = opdLocations.some(l => !l.mapLocation);
+        if (!hasEmpty) return;
+        navigator.geolocation.getCurrentPosition((pos) => {
+            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setOpdLocations(prev => prev.map(l => !l.mapLocation ? { ...l, mapLocation: coords } : l));
+            // Pan existing maps if mounted
+            Object.entries(mapRefs.current || {}).forEach(([id, map]) => {
+                if (map && typeof map.panTo === 'function') {
+                    map.panTo(coords);
+                    if (typeof map.setZoom === 'function') map.setZoom(15);
+                }
+            });
+            setBootstrappedGeo(true);
+        });
+    }, [isMapLibLoaded, opdLocations, bootstrappedGeo]);
 
     const validateOpdLocations = () => {
         const invalidIds = opdLocations.filter(loc => {
@@ -249,6 +281,79 @@ const Settings = () => {
             setAvatarPreview(URL.createObjectURL(file));
             setAvatarFileName(file.name);
             markDirty();
+        }
+    };
+    
+    // Camera capture helpers
+    const startCamera = async () => {
+        try {
+            setCameraError('');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+            streamRef.current = stream;
+        } catch (err) {
+            console.error('Camera error:', err);
+            setCameraError('Unable to access camera. Please allow permissions or try a different device.');
+        }
+    };
+
+    const stopCamera = () => {
+        const stream = streamRef.current;
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    };
+
+    const openCamera = async () => {
+        setCapturedDataUrl('');
+        setCameraOpen(true);
+        await startCamera();
+    };
+
+    const closeCamera = () => {
+        stopCamera();
+        setCameraOpen(false);
+    };
+
+    const capturePhoto = () => {
+        const video = videoRef.current;
+        if (!video) return;
+        const w = video.videoWidth || 720;
+        const h = video.videoHeight || 960;
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w;
+        offscreen.height = h;
+        const ctx = offscreen.getContext('2d');
+        ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = offscreen.toDataURL('image/jpeg', 0.92);
+        setCapturedDataUrl(dataUrl);
+        if (videoRef.current) videoRef.current.pause();
+    };
+
+    const retakePhoto = () => {
+        setCapturedDataUrl('');
+        if (videoRef.current) videoRef.current.play();
+    };
+
+    const useCapturedPhoto = async () => {
+        try {
+            if (!capturedDataUrl) return;
+            const res = await fetch(capturedDataUrl);
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            setAvatarPreview(objectUrl);
+            setAvatarFileName('camera.jpg');
+            markDirty();
+            closeCamera();
+        } catch (e) {
+            toast.error('Could not use captured photo');
         }
     };
     const removeAvatar = () => {
@@ -614,6 +719,7 @@ const Settings = () => {
                                                     className="hidden"
                                                     id="avatar-upload"
                                                     accept="image/*"
+                                                    capture="user"
                                                 />
                                                 <label
                                                     htmlFor="avatar-upload"
@@ -623,6 +729,18 @@ const Settings = () => {
                                                     <FiCamera size={16} />
                                                 </label>
                                             </div>
+                                            {/* Action buttons under avatar */}
+                                            <div className="w-full mt-4 flex gap-2 justify-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={openCamera}
+                                                    className="px-3 py-1.5 text-sm rounded-lg bg-gray-900 text-white hover:opacity-90"
+                                                    title="Take photo with camera"
+                                                >
+                                                    Take Photo
+                                                </button>
+                                            </div>
+
                                             {/* Bio under avatar */}
                                             <div className="w-full mt-6">
                                                 <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">Bio / About</label>
@@ -780,8 +898,8 @@ const Settings = () => {
                                                         {/* Inline Map directly below Active Days */}
                                                         <div className="mt-3 border rounded overflow-hidden" style={{ height: 280 }}>
                                                             {!mapsApiKey ? (
-                                                                <div className="h-full w-full bg-gray-50 flex items-center justify-center text-sm text-gray-600">
-                                                                    Map demo — API key not set. Add VITE_GOOGLE_MAPS_API_KEY to show interactive map.
+                                                                <div className="h-full flex items-center justify-center text-sm text-gray-500 bg-gray-50">
+                                                                    Google Maps API key not configured
                                                                 </div>
                                                             ) : !isMapLibLoaded ? (
                                                                 <div className="h-full flex items-center justify-center text-sm text-gray-500">Loading map…</div>
@@ -792,6 +910,7 @@ const Settings = () => {
                                                                     mapContainerStyle={{ width: '100%', height: '100%' }}
                                                                     center={loc.mapLocation || { lat: 28.6139, lng: 77.2090 }}
                                                                     zoom={14}
+                                                                    onLoad={(map) => { mapRefs.current[loc.id] = map; }}
                                                                     onClick={(e) => {
                                                                         const coords = { lat: e.latLng.lat(), lng: e.latLng.lng() };
                                                                         setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: coords } : p));
@@ -834,12 +953,71 @@ const Settings = () => {
                                                                 onClick={() => { setMapPickerLocId(loc.id); setMapPickerOpen(true); }}
                                                                 className="px-3 py-1 bg-[#ede9fe] rounded"
                                                             >Search on Map</button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!navigator.geolocation) return;
+                                                                    navigator.geolocation.getCurrentPosition((pos) => {
+                                                                        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                                                                        // Reverse geocode to get address/city
+                                                                        const applyUpdate = (addr, cityName) => {
+                                                                            setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: coords, address: addr || p.address, city: cityName || p.city } : p));
+                                                                        };
+                                                                        try {
+                                                                            if (window.google?.maps?.Geocoder) {
+                                                                                const geocoder = new window.google.maps.Geocoder();
+                                                                                geocoder.geocode({ location: coords }, (results, status) => {
+                                                                                    if (status === 'OK' && results && results.length) {
+                                                                                        const top = results[0];
+                                                                                        const formatted = top.formatted_address || '';
+                                                                                        let cityName = '';
+                                                                                        const comps = top.address_components || [];
+                                                                                        const locality = comps.find(c => c.types.includes('locality'));
+                                                                                        const administrative = comps.find(c => c.types.includes('administrative_area_level_2'));
+                                                                                        if (locality) cityName = locality.long_name;
+                                                                                        else if (administrative) cityName = administrative.long_name;
+                                                                                        applyUpdate(formatted, cityName);
+                                                                                    } else {
+                                                                                        applyUpdate('', '');
+                                                                                    }
+                                                                                });
+                                                                            } else {
+                                                                                applyUpdate('', '');
+                                                                            }
+                                                                        } catch {
+                                                                            applyUpdate('', '');
+                                                                        }
+                                                                        if (mapRefs.current[loc.id]) {
+                                                                            mapRefs.current[loc.id].panTo(coords);
+                                                                            mapRefs.current[loc.id].setZoom(15);
+                                                                        }
+                                                                        markDirty();
+                                                                    });
+                                                                }}
+                                                                className="px-3 py-1 bg-gray-100 rounded"
+                                                            >My location</button>
                                                             {/* Map is now always visible below Active Days; toggle removed */}
                                                             <button
                                                                 onClick={() => { setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, mapLocation: null } : p)); markDirty(); }}
                                                                 className="px-3 py-1 bg-gray-100 rounded"
                                                                 disabled={!loc.mapLocation}
                                                             >Clear Map</button>
+                                                            {loc.mapLocation && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const { lat, lng } = loc.mapLocation || {};
+                                                                        if (typeof lat === 'number' && typeof lng === 'number') {
+                                                                            const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                                                                            navigator.clipboard?.writeText(url);
+                                                                            if (window.showToast) {
+                                                                                window.showToast('Share link copied to clipboard', 'success', 2500);
+                                                                            } else if (typeof toast?.success === 'function') {
+                                                                                toast.success('Share link copied to clipboard');
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="px-3 py-1 bg-gray-100 rounded"
+                                                                >Copy Share Link</button>
+                                                            )}
                                                             {loc.mapLocation && (
                                                                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Map set</span>
                                                             )}
@@ -871,6 +1049,13 @@ const Settings = () => {
                                                                 {isMapLibLoaded && (
                                                                     <Autocomplete
                                                                         onLoad={(ref) => { autoRefs.current[loc.id] = ref; }}
+                                                                        options={{
+                                                                            fields: ['geometry','formatted_address','name','address_components'],
+                                                                            bounds: mapRefs.current[loc.id]?.getBounds?.(),
+                                                                            strictBounds: false,
+                                                                            componentRestrictions: { country: ['in'] },
+                                                                            types: ['establishment','geocode']
+                                                                        }}
                                                                         onPlaceChanged={() => {
                                                                             const ref = autoRefs.current[loc.id];
                                                                             if (!ref) return;
@@ -890,6 +1075,10 @@ const Settings = () => {
                                                                             else if (administrative) cityName = administrative.long_name;
                                                                             setOpdLocations(prev => prev.map(p => p.id===loc.id ? { ...p, address: formatted, city: cityName, mapLocation: coords || p.mapLocation } : p));
                                                                             markDirty();
+                                                                            if (coords && mapRefs.current[loc.id]) {
+                                                                                mapRefs.current[loc.id].panTo(coords);
+                                                                                mapRefs.current[loc.id].setZoom(16);
+                                                                            }
                                                                         }}
                                                                     >
                                                                         <input
@@ -924,7 +1113,7 @@ const Settings = () => {
                                                     console.error(err);
                                                     toast.error('Failed to save OPD locations');
                                                 }
-                                            }} className="px-4 py-2 bg-purple-600 text-white rounded">Save OPD Locations</button>
+                                            }} className="font-semibold px-5 py-2 rounded-full text-white" style={{ backgroundColor: brandingColors.primary }}>Save OPD Locations</button>
 
                                             <button onClick={() => {
                                                 // reset to initial single blank
@@ -1355,6 +1544,10 @@ const Settings = () => {
                         const { coords, clinicName, address, city } = payload || {};
                         setOpdLocations(prev => prev.map(p => p.id === mapPickerLocId ? { ...p, mapLocation: coords || p.mapLocation, clinicName: clinicName || p.clinicName, address: address || p.address, city: city || p.city } : p));
                         setMapPickerOpen(false);
+                        if (coords && mapRefs.current[mapPickerLocId]) {
+                            mapRefs.current[mapPickerLocId].panTo(coords);
+                            mapRefs.current[mapPickerLocId].setZoom(16);
+                        }
                     }}
                     initialPosition={(opdLocations.find(l => l.id === mapPickerLocId)?.mapLocation) || { lat: 28.6139, lng: 77.2090 }}
                 />

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
+import { toast } from 'react-toastify';
 
 const containerStyle = {
   width: '100%',
@@ -19,6 +20,7 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
   const [markerPos, setMarkerPos] = useState(startCenter);
   const [placeInfo, setPlaceInfo] = useState(null);
   const searchInputRef = useRef(null);
+  const autocompleteRef = useRef(null);
   const mapRef = useRef(null);
 
   const onMapClick = useCallback((e) => {
@@ -27,6 +29,15 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
 
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
+    // Keep autocomplete suggestions biased to current map bounds
+    if (autocompleteRef.current && map.getBounds) {
+      autocompleteRef.current.setBounds(map.getBounds());
+    }
+    map.addListener('idle', () => {
+      if (autocompleteRef.current && map.getBounds) {
+        autocompleteRef.current.setBounds(map.getBounds());
+      }
+    });
   }, []);
 
   const recenterToMarker = () => {
@@ -55,21 +66,52 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
         mapRef.current.panTo(coords);
         mapRef.current.setZoom(15);
       }
+      // Reverse geocode to show address/city
+      try {
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: coords }, (results, status) => {
+            if (status === 'OK' && results && results.length) {
+              const top = results[0];
+              const formatted = top.formatted_address || '';
+              let city = '';
+              const comps = top.address_components || [];
+              const locality = comps.find(c => c.types.includes('locality'));
+              const administrative = comps.find(c => c.types.includes('administrative_area_level_2'));
+              if (locality) city = locality.long_name;
+              else if (administrative) city = administrative.long_name;
+              setPlaceInfo({ clinicName: '', address: formatted, city });
+            }
+          });
+        }
+      } catch {}
     });
   };
 
   useEffect(() => {
     if (!isLoaded) return;
     if (!searchInputRef.current) return;
-    const autocomplete = new window.google.maps.places.Autocomplete(searchInputRef.current, {
-      fields: ['geometry', 'formatted_address', 'name', 'address_components']
-    });
+    const opts = {
+      fields: ['geometry', 'formatted_address', 'name', 'address_components'],
+      // Bias suggestions to current map viewport if available
+      bounds: mapRef.current ? mapRef.current.getBounds() : undefined,
+      strictBounds: false,
+      componentRestrictions: { country: ['in'] },
+      types: ['establishment', 'geocode']
+    };
+    const autocomplete = new window.google.maps.places.Autocomplete(searchInputRef.current, opts);
+    autocompleteRef.current = autocomplete;
     const listener = autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace();
       if (!place.geometry || !place.geometry.location) return;
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
       setMarkerPos({ lat, lng });
+      // Pan and zoom to result like Google Maps
+      if (mapRef.current) {
+        mapRef.current.panTo({ lat, lng });
+        mapRef.current.setZoom(16);
+      }
       // parse city from address components
       let city = '';
       if (Array.isArray(place.address_components)) {
@@ -84,6 +126,39 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
     });
     return () => listener && window.google.maps.event.removeListener(listener);
   }, [isLoaded]);
+
+  // On open, center to user's current location if available
+  useEffect(() => {
+    if (!isOpen || !isLoaded) return;
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setMarkerPos(coords);
+      if (mapRef.current) {
+        mapRef.current.panTo(coords);
+        mapRef.current.setZoom(15);
+      }
+      // Reverse geocode once on open to prefill address
+      try {
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: coords }, (results, status) => {
+            if (status === 'OK' && results && results.length) {
+              const top = results[0];
+              const formatted = top.formatted_address || '';
+              let city = '';
+              const comps = top.address_components || [];
+              const locality = comps.find(c => c.types.includes('locality'));
+              const administrative = comps.find(c => c.types.includes('administrative_area_level_2'));
+              if (locality) city = locality.long_name;
+              else if (administrative) city = administrative.long_name;
+              setPlaceInfo({ clinicName: '', address: formatted, city });
+            }
+          });
+        }
+      } catch {}
+    });
+  }, [isOpen, isLoaded]);
 
   if (!isOpen) return null;
 
@@ -103,6 +178,7 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
                 type="text"
                 placeholder="Search clinic or city..."
                 className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                autoComplete="off"
               />
             )}
             <p className="text-xs text-gray-500">Tip: Search your clinic or city, then fine-tune by dragging the marker.</p>
@@ -154,6 +230,22 @@ export default function MapPicker({ isOpen, onClose, onSelect, initialPosition }
 
             <div className="mt-5 flex justify-end gap-3">
               <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button
+                onClick={() => {
+                  if (!markerPos) return;
+                  const shareUrl = `https://www.google.com/maps/search/?api=1&query=${markerPos.lat},${markerPos.lng}`;
+                  navigator.clipboard?.writeText(shareUrl);
+                  if (window.showToast) {
+                    window.showToast('Link copied to clipboard', 'success', 2500);
+                  } else if (typeof toast?.success === 'function') {
+                    toast.success('Link copied to clipboard');
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800"
+                disabled={!markerPos}
+              >
+                Copy share link
+              </button>
               <button
                 onClick={() => {
                   if (!markerPos) return;

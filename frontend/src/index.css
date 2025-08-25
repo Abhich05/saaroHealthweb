@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Make Google Places suggestions dropdown appear above modals */
+.pac-container {
+  z-index: 10000 !important;
+}

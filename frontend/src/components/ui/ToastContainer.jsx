@@ -22,7 +22,7 @@ const ToastContainer = () => {
   }, [addToast]);
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed top-4 right-4 z-[11000] space-y-2">
       {toasts.map((toast, index) => (
         <div
           key={toast.id}

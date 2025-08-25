@@ -243,32 +243,18 @@ const getPatientById = async ( patientId ) => {
   }
 }
 
-const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "", sortBy, sortDir ) => {
+const getAllPatients = async (
+  doctorId,
+  page = 1,
+  limit = 25,
+  searchQuery = "",
+  sortBy,
+  sortDir
+) => {
   try {
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 25;
     const skip = (pageNumber - 1) * limitNumber;
-
-    let searchFilter = {};
-    if (searchQuery) {
-      const numericSearch = !isNaN(searchQuery) ? Number(searchQuery) : null;
-
-      searchFilter = {
-        $or: [
-          { fullName: { $regex: searchQuery, $options: "i" } },
-          { uid: { $regex: searchQuery, $options: "i" } },
-          ...(numericSearch !== null ? [{ phoneNumber: numericSearch }] : []),
-        ],
-      };
-    }
-
-    const matchingPatients = await Patient.find(searchFilter).select("_id");
-    const matchingPatientIds = matchingPatients.map((patient) => patient._id);
-
-    const totalPatients = await DoctorPatient.countDocuments({
-      doctorId,
-      patientId: { $in: matchingPatientIds },
-    });
 
     // Determine sort field and direction
     const sortMap = {
@@ -281,12 +267,15 @@ const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "",
     const resolvedSortField = sortMap[sortBy] || 'updatedAt';
     const resolvedSortDir = String(sortDir).toLowerCase() === 'asc' ? 1 : -1;
 
-    // Aggregation pipeline to join Patient and sort on joined fields
+    // Build aggregation pipeline
     const docObjectId = mongoose.Types.ObjectId.isValid(doctorId)
       ? new mongoose.Types.ObjectId(doctorId)
       : doctorId;
+
     const pipeline = [
-      { $match: { doctorId: docObjectId, patientId: { $in: matchingPatientIds } } },
+      // Match by doctor up front to keep pipeline narrow
+      { $match: { doctorId: docObjectId } },
+      // Join patient document
       {
         $lookup: {
           from: 'patients',
@@ -296,29 +285,62 @@ const getAllPatients = async ( doctorId, page = 1, limit = 25, searchQuery = "",
         },
       },
       { $unwind: '$patient' },
-      { $sort: { [resolvedSortField]: resolvedSortDir, _id: 1 } },
-      { $skip: skip },
-      { $limit: limitNumber },
-      // Preserve original response shape: expose joined patient under patientId
-      {
-        $project: {
-          _id: 1,
-          doctorId: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          patientId: '$patient',
-        },
-      },
     ];
 
-    const aggResults = await DoctorPatient.aggregate(pipeline);
+    // Optional search across joined patient fields
+    if (searchQuery) {
+      const numericSearch = !isNaN(searchQuery) ? Number(searchQuery) : null;
+      const searchOr = [
+        { 'patient.fullName': { $regex: searchQuery, $options: 'i' } },
+        { 'patient.uid': { $regex: searchQuery, $options: 'i' } },
+      ];
+      if (numericSearch !== null) {
+        searchOr.push({ 'patient.phoneNumber': numericSearch });
+      }
+      pipeline.push({ $match: { $or: searchOr } });
+    }
+
+    // Use $facet to get paginated data and total count in a single round-trip
+    pipeline.push({
+      $facet: {
+        data: [
+          { $sort: { [resolvedSortField]: resolvedSortDir, _id: 1 } },
+          { $skip: skip },
+          { $limit: limitNumber },
+          {
+            $project: {
+              _id: 1,
+              doctorId: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              // Only send required patient fields to reduce payload
+              patientId: {
+                _id: '$patient._id',
+                uid: '$patient.uid',
+                fullName: '$patient.fullName',
+                phoneNumber: '$patient.phoneNumber',
+                category: '$patient.category',
+                updatedAt: '$patient.updatedAt',
+              },
+            },
+          },
+        ],
+        totalCount: [
+          { $count: 'count' },
+        ],
+      },
+    });
+
+    const [result] = await DoctorPatient.aggregate(pipeline);
+    const aggResults = result?.data || [];
+    const totalPatients = (result?.totalCount?.[0]?.count) || 0;
 
     return {
       statusCode: 200,
       patients: aggResults,
       pagination: {
         currentPage: pageNumber,
-        totalPages: Math.ceil(totalPatients / limitNumber),
+        totalPages: Math.ceil(totalPatients / limitNumber) || 1,
         totalPatients,
         pageSize: limitNumber,
         hasNextPage: pageNumber * limitNumber < totalPatients,

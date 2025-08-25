@@ -5,45 +5,38 @@ const SettingsSkeletonLoader = () => {
     <div className="space-y-6">
       {/* Profile & Availability Header */}
       <div className="h-6 bg-gray-200 rounded animate-pulse w-48"></div>
-      
-      {/* Profile Picture Section */}
-      <div className="flex items-center gap-4">
-        <div>
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-32 mb-1"></div>
-          
-          {/* Avatar Preview Skeleton */}
-          <div className="mb-4 flex justify-center">
-            <div className="w-20 h-20 bg-gray-200 rounded-full animate-pulse"></div>
+
+      {/* Profile grid: Left avatar+bio, Right form fields */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* Left: Avatar with camera badge and Bio */}
+        <div className="lg:col-span-1">
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-32 mb-2"></div>
+          <div className="relative w-28 h-28 mx-auto">
+            <div className="w-28 h-28 bg-gray-200 rounded-full animate-pulse"></div>
+            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-gray-300 rounded-full animate-pulse"></div>
           </div>
-          
-          {/* Upload Section Skeleton */}
-          <div className="mb-6 max-w-lg border-2 border-dashed border-gray-300 p-6 rounded-lg text-center">
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-32 mx-auto mb-1"></div>
-            <div className="h-3 bg-gray-200 rounded animate-pulse w-48 mx-auto mb-2"></div>
-            <div className="h-8 bg-gray-200 rounded animate-pulse w-20 mx-auto"></div>
+          <div className="mt-6">
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-24 mb-2"></div>
+            <div className="h-28 bg-gray-200 rounded-lg animate-pulse"></div>
           </div>
         </div>
-      </div>
 
-      {/* Form Fields Skeleton */}
-      <div className="flex flex-col gap-6">
-        {[1, 2, 3, 4, 5, 6].map((field) => (
-          <div key={field}>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-24 mb-1"></div>
-            <div className="h-10 bg-gray-200 rounded-lg animate-pulse w-1/2"></div>
+        {/* Right: Two-column fields and Save bar */}
+        <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i}>
+                <div className="h-4 bg-gray-200 rounded animate-pulse w-24 mb-1"></div>
+                <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+            ))}
+
+            {/* Save bar */}
+            <div className="sm:col-span-2 pt-4 border-t border-gray-100 flex justify-end">
+              <div className="h-10 bg-gray-200 rounded-lg animate-pulse w-full sm:w-36"></div>
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Bio Section Skeleton */}
-      <div className="mt-6">
-        <div className="h-4 bg-gray-200 rounded animate-pulse w-16 mb-1"></div>
-        <div className="h-28 bg-gray-200 rounded-lg animate-pulse w-1/2"></div>
-      </div>
-
-      {/* Save Button Skeleton */}
-      <div className="mt-6">
-        <div className="h-10 bg-gray-200 rounded-lg animate-pulse w-32"></div>
+        </div>
       </div>
 
       {/* OPD & Appointment Timing Management Section */}
