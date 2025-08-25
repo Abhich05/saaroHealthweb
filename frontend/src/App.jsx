@@ -1,47 +1,50 @@
-import React, { useEffect, useState, createContext } from 'react';
+import React, { useEffect, useState, createContext, lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import CustomToastContainer from "./components/ui/ToastContainer";
+import Loading from "./components/ui/Loading";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
-import ProtectedRoute from "./components/routes/ProtectedRoute"
-import RoleProtectedRoute from "./components/routes/RoleProtectedRoute"
-import Dashboard from "./pages/Dashboard"
-import AiAssistant from "./pages/AiAssistant"
-import Invoice from "./pages/Invoice"
-import CreateRx from "./pages/CreateRx"
-import AllPatients from "./pages/AllPatients"
-import IPDRecords from "./pages/IpdRecords"
-import Settings from "./pages/Settings"
-import Templates from "./pages/Template"
-import DropDownConfiguration from "./pages/DropDownConfiguration"
-import Referrals from "./pages/Referrals"
-import Document from "./pages/Document"
-import Medicines from "./pages/Medicine"
-import PatientQueue from "./pages/PatientQueue" 
-import ConsultationForm from "./pages/Consult"
-import DischargeSummaryForm from "./pages/Discharge"
-import Messages from "./pages/Messages"
-import AppointmentsDashboard from "./pages/Appointments"
-import PublicBookingPage from "./pages/PublicBookingPage"
-import NotFoundPage from "./pages/PageNotFound"
-import Socials from "./pages/Socials";
-import Automation from "./pages/Automation"
-import PatientHistoryPage from "./pages/PatientHistoryPage";
-import UserManagementPage from "./pages/UserManagementPage"
-import OnboardingPage from "./pages/OnBoardingPage"
-import SignupStepsPage from "./pages/SignupStepsPage";
-import StepTwoPage from "./pages/StepTwoPage"
-import StepThreePage from "./pages/StepThreePage"
-import StepFourPage from "./pages/StepFourPage"
-import LoginPage from "./pages/LoginPage"
-import UserLoginPage from "./pages/UserLoginPage"
-import ForgotPassword from "./pages/ForgotPassword"
-import VerifyAccountPage from "./pages/VerifyAccountPage"
-import ResetPassword from "./pages/ResetPassword"
-import PhoneLogin from "./pages/PhoneLogin"
-import PasswordResetSuccess from "./pages/PasswordResetSuccess";
-import UnauthorizedPage from "./pages/UnauthorizedPage";
+import ProtectedRoute from "./components/routes/ProtectedRoute";
+import RoleProtectedRoute from "./components/routes/RoleProtectedRoute";
+// Route-level code splitting: lazy-load pages
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const AiAssistant = lazy(() => import("./pages/AiAssistant"));
+const Invoice = lazy(() => import("./pages/Invoice"));
+const CreateRx = lazy(() => import("./pages/CreateRx"));
+const AllPatients = lazy(() => import("./pages/AllPatients"));
+const IPDRecords = lazy(() => import("./pages/IpdRecords"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Templates = lazy(() => import("./pages/Template"));
+const DropDownConfiguration = lazy(() => import("./pages/DropDownConfiguration"));
+const Referrals = lazy(() => import("./pages/Referrals"));
+const Document = lazy(() => import("./pages/Document"));
+const Medicines = lazy(() => import("./pages/Medicine"));
+const PatientQueue = lazy(() => import("./pages/PatientQueue"));
+const ConsultationForm = lazy(() => import("./pages/Consult"));
+const DischargeSummaryForm = lazy(() => import("./pages/Discharge"));
+const Messages = lazy(() => import("./pages/Messages"));
+const AppointmentsDashboard = lazy(() => import("./pages/Appointments"));
+const PublicBookingPage = lazy(() => import("./pages/PublicBookingPage"));
+const NotFoundPage = lazy(() => import("./pages/PageNotFound"));
+const Socials = lazy(() => import("./pages/Socials"));
+const Automation = lazy(() => import("./pages/Automation"));
+const PatientHistoryPage = lazy(() => import("./pages/PatientHistoryPage"));
+const UserManagementPage = lazy(() => import("./pages/UserManagementPage"));
+const OnboardingPage = lazy(() => import("./pages/OnBoardingPage"));
+const SignupStepsPage = lazy(() => import("./pages/SignupStepsPage"));
+const StepTwoPage = lazy(() => import("./pages/StepTwoPage"));
+const StepThreePage = lazy(() => import("./pages/StepThreePage"));
+const StepFourPage = lazy(() => import("./pages/StepFourPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const UserLoginPage = lazy(() => import("./pages/UserLoginPage"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const VerifyAccountPage = lazy(() => import("./pages/VerifyAccountPage"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const PhoneLogin = lazy(() => import("./pages/PhoneLogin"));
+const PasswordResetSuccess = lazy(() => import("./pages/PasswordResetSuccess"));
+const UnauthorizedPage = lazy(() => import("./pages/UnauthorizedPage"));
 import axiosInstance from './api/axiosInstance';
 import { clearAllAuth } from "./utils/auth";
 
@@ -228,6 +231,8 @@ function App() {
       <DoctorNameContext.Provider value={doctorName}>
         <UserContext.Provider value={user}>
           <CustomToastContainer />
+          <ErrorBoundary>
+          <Suspense fallback={<Loading />}>
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -269,6 +274,8 @@ function App() {
             <Route path='/user' element={<ProtectedRoute><RoleProtectedRoute requiredPermission="settings"><UserManagementPage /></RoleProtectedRoute></ProtectedRoute>} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </Suspense>
+          </ErrorBoundary>
         </UserContext.Provider>
       </DoctorNameContext.Provider>
     </DoctorIdContext.Provider>

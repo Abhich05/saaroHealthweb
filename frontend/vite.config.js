@@ -5,10 +5,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/',
-  define: {
-    // Ensure environment variables are available at build time
-    'process.env': {}
-  },
   build: {
     // Ensure environment variables are properly included
     rollupOptions: {
