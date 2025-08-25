@@ -12,43 +12,83 @@ const Header = () => {
   const dropdownRef = useRef(null);
 
   const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
-  const currentUserName = localStorage.getItem('userName') || localStorage.getItem('doctorName') || 'User';
+  const [displayName, setDisplayName] = useState(
+    localStorage.getItem('userName') || localStorage.getItem('doctorName') || 'User'
+  );
   const currentUserRole = localStorage.getItem('userRole') || 'Doctor';
 
   useEffect(() => {
     const fetchProfilePicture = async () => {
       try {
-        const doctorId = localStorage.getItem('doctorId');
-        if (!doctorId) return;
-
-        const res = await axiosInstance.get(`/doctor/${doctorId}`);
-        if (res.data && res.data.doctor && res.data.doctor.avatar) {
-          const normalizeUrl = (url) => {
-            try {
-              const apiOrigin = new URL(axiosInstance.defaults.baseURL).origin;
-              const resolved = new URL(url, apiOrigin);
-              const pageIsHttps = window.location.protocol === 'https:';
-              // If avatar points to localhost in prod, swap to API origin
-              if (resolved.hostname.includes('localhost') && !window.location.hostname.includes('localhost')) {
-                return `${apiOrigin}${resolved.pathname}`;
-              }
-              // Enforce https when page is https
-              if (pageIsHttps && resolved.protocol !== 'https:') {
-                return `https://${resolved.host}${resolved.pathname}`;
-              }
-              return resolved.href;
-            } catch (e) {
-              return url;
+        const isUserLogin = localStorage.getItem('isUserLogin') === 'true';
+        const normalizeUrl = (url) => {
+          try {
+            const apiOrigin = new URL(axiosInstance.defaults.baseURL).origin;
+            const resolved = new URL(url, apiOrigin);
+            const pageIsHttps = window.location.protocol === 'https:';
+            if (resolved.hostname.includes('localhost') && !window.location.hostname.includes('localhost')) {
+              return `${apiOrigin}${resolved.pathname}`;
             }
-          };
-          setProfilePicture(normalizeUrl(res.data.doctor.avatar));
+            if (pageIsHttps && resolved.protocol !== 'https:') {
+              return `https://${resolved.host}${resolved.pathname}`;
+            }
+            return resolved.href;
+          } catch (e) {
+            return url;
+          }
+        };
+
+        if (isUserLogin) {
+          // Staff user: load their own avatar
+          const res = await axiosInstance.get(`/user/me`);
+          const user = res.data && res.data.user;
+          if (user?.avatar) {
+            setProfilePicture(normalizeUrl(user.avatar));
+          }
+        } else {
+          // Doctor: load doctor avatar
+          const doctorId = localStorage.getItem('doctorId');
+          if (!doctorId) return;
+          const res = await axiosInstance.get(`/doctor/${doctorId}`);
+          const doctor = res.data && res.data.doctor;
+          if (doctor?.avatar) {
+            setProfilePicture(normalizeUrl(doctor.avatar));
+          }
         }
       } catch (error) {
         console.error('Error fetching profile picture:', error);
       }
     };
-    
+
     fetchProfilePicture();
+  }, []);
+
+  // Listen for Settings page updates to refresh avatar/name without reload
+  useEffect(() => {
+    const normalizeUrl = (url) => {
+      try {
+        const apiOrigin = new URL(axiosInstance.defaults.baseURL).origin;
+        const resolved = new URL(url, apiOrigin);
+        const pageIsHttps = window.location.protocol === 'https:';
+        if (resolved.hostname.includes('localhost') && !window.location.hostname.includes('localhost')) {
+          return `${apiOrigin}${resolved.pathname}`;
+        }
+        if (pageIsHttps && resolved.protocol !== 'https:') {
+          return `https://${resolved.host}${resolved.pathname}`;
+        }
+        return resolved.href;
+      } catch (e) {
+        return url;
+      }
+    };
+
+    const handler = (e) => {
+      const { avatar, name } = e.detail || {};
+      if (avatar) setProfilePicture(normalizeUrl(avatar));
+      if (name) setDisplayName(name);
+    };
+    window.addEventListener('profile-updated', handler);
+    return () => window.removeEventListener('profile-updated', handler);
   }, []);
 
   const logoutHandler = async () => {
@@ -110,7 +150,7 @@ const Header = () => {
               ) : null}
               <CgProfile size={20} className="text-gray-600" style={{ display: profilePicture ? 'none' : 'block' }} />
               <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">{currentUserName}</p>
+                <p className="text-sm font-medium text-gray-900">{displayName}</p>
                 <p className="text-xs text-gray-500 capitalize">{currentUserRole}</p>
               </div>
             </button>
@@ -133,7 +173,7 @@ const Header = () => {
                     ) : null}
                     <CgProfile size={20} className="text-gray-600" style={{ display: profilePicture ? 'none' : 'block' }} />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{currentUserName}</p>
+                      <p className="text-sm font-medium text-gray-900">{displayName}</p>
                       <p className="text-xs text-gray-500 capitalize">{currentUserRole}</p>
                       {isUserLogin && (
                         <p className="text-xs text-gray-500">

@@ -78,6 +78,65 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
+// Generic branding uploader factory
+const makeBrandingUploader = (fieldName) => {
+  const folder = 'public/branding/';
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const fs = require('fs');
+      if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+      }
+      cb(null, folder);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now();
+      const ext = path.extname(file.originalname);
+      cb(null, `${fieldName}_${uniqueSuffix}${ext}`);
+    },
+  });
+
+  const fileFilter = (req, file, cb) => {
+    const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.pdf'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) return cb(null, true);
+    return cb(new Error('Invalid file type. Allowed: PNG, JPG, JPEG, GIF, SVG, PDF'));
+  };
+
+  const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  }).single(fieldName);
+
+  return (req, res) => {
+    upload(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({ message: `Multer error: ${err.message}` });
+      } else if (err) {
+        return res.status(400).json({ message: `Error: ${err.message}` });
+      }
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+
+      const proto = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const baseUrl = `${proto}://${host}`;
+      const url = `${baseUrl}/public/branding/${req.file.filename}`;
+      return res.status(200).json({
+        message: 'Branding asset uploaded successfully.',
+        url,
+        filename: req.file.filename,
+        field: fieldName,
+      });
+    });
+  };
+};
+
+// Specific branding upload handlers
+const uploadBrandingLogo = makeBrandingUploader('brandingLogo');
+const uploadBrandingLetterhead = makeBrandingUploader('brandingLetterhead');
+const uploadBrandingSignature = makeBrandingUploader('brandingSignature');
+
 const getFilesByPatientId = async (req, res) => {
   try {
     // Support both route param and query param for patientId
@@ -146,4 +205,7 @@ module.exports = {
   updateIpdRecord,
   getAllIpdRecords,
   uploadAvatar,
+  uploadBrandingLogo,
+  uploadBrandingLetterhead,
+  uploadBrandingSignature,
 };

@@ -117,6 +117,53 @@ const getFirstDoctor = async (req, res) => {
   }
 };
 
+// Get OPD locations for authenticated doctor
+const getOpdLocations = async (req, res) => {
+  try {
+    const authDoctorId = req.doctor.id;
+    const { doctorId: paramDoctorId } = req.params;
+
+    if (paramDoctorId && String(paramDoctorId) !== String(authDoctorId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const doctor = await Doctor.findById(authDoctorId).select('opdLocations');
+    if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(200).json({ opdLocations: doctor.opdLocations || [] });
+  } catch (error) {
+    console.error('Error getting OPD locations:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Update OPD locations for authenticated doctor
+const updateOpdLocations = async (req, res) => {
+  try {
+    const authDoctorId = req.doctor.id;
+    const { doctorId: paramDoctorId } = req.params;
+    const { opdLocations } = req.body || {};
+
+    if (paramDoctorId && String(paramDoctorId) !== String(authDoctorId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!Array.isArray(opdLocations)) {
+      return res.status(400).json({ error: 'opdLocations must be an array' });
+    }
+
+    const doctor = await Doctor.findById(authDoctorId);
+    if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+
+    doctor.opdLocations = opdLocations;
+    await doctor.save();
+
+    return res.status(200).json({ message: 'OPD locations updated', opdLocations: doctor.opdLocations });
+  } catch (error) {
+    console.error('Error updating OPD locations:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -164,7 +211,7 @@ const changePassword = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const doctorId = req.doctor.id;
-    const { name, email, mobile, experience, specialization, education, bio, avatar } = req.body;
+    const { name, email, mobile, experience, specialization, education, bio, avatar, brandingLogo, brandingLetterhead, brandingSignature, brandingColors, brandingFont } = req.body;
 
     console.log('=== DOCTOR PROFILE UPDATE DEBUG ===');
     console.log('Doctor ID:', doctorId);
@@ -189,6 +236,21 @@ const updateProfile = async (req, res) => {
     if (education) doctor.education = education;
     if (bio) doctor.bio = bio;
     if (avatar) doctor.avatar = avatar;
+    if (brandingLogo) doctor.brandingLogo = brandingLogo;
+    if (brandingLetterhead) doctor.brandingLetterhead = brandingLetterhead;
+    if (brandingSignature) doctor.brandingSignature = brandingSignature;
+    if (brandingColors && typeof brandingColors === 'object') {
+      doctor.brandingColors = {
+        ...doctor.brandingColors,
+        ...brandingColors,
+      };
+    }
+    if (brandingFont && typeof brandingFont === 'object') {
+      doctor.brandingFont = {
+        ...doctor.brandingFont,
+        ...brandingFont,
+      };
+    }
 
     console.log('Updated doctor object:', {
       name: doctor.name,
@@ -215,7 +277,12 @@ const updateProfile = async (req, res) => {
         education: doctor.education,
         bio: doctor.bio,
         avatar: doctor.avatar,
-        clinicName: doctor.clinicName
+        clinicName: doctor.clinicName,
+        brandingLogo: doctor.brandingLogo,
+        brandingLetterhead: doctor.brandingLetterhead,
+        brandingSignature: doctor.brandingSignature,
+        brandingColors: doctor.brandingColors,
+        brandingFont: doctor.brandingFont,
       }
     });
   } catch (error) {
@@ -255,5 +322,7 @@ module.exports = {
   deleteDoctor,
   getFirstDoctor,
   changePassword,
-  updateProfile
+  updateProfile,
+  getOpdLocations,
+  updateOpdLocations,
 };

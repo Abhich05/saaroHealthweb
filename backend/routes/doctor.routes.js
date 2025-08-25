@@ -50,6 +50,19 @@ doctor.put(
   doctorController.updateProfile,
 );
 
+// OPD locations routes (requires doctor authentication)
+doctor.get(
+  '/:doctorId/opd-locations',
+  doctorMiddleware,
+  doctorController.getOpdLocations,
+);
+
+doctor.put(
+  '/:doctorId/opd-locations',
+  doctorMiddleware,
+  doctorController.updateOpdLocations,
+);
+
 // For debugging: temporarily remove doctorMiddleware from patient-queue route
 // doctor.get('/:doctorId/patient-queue', doctorMiddleware, patientQueueController.getPatientQueue);
 doctor.get('/:doctorId/patient-queue', patientQueueController.getPatientQueue);
