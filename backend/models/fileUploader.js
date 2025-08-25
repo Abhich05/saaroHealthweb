@@ -37,33 +37,91 @@ const fileUploaderSchema = new mongoose.Schema(
   },
 );
 
-fileUploaderSchema.statics.getPaginatedIpdRecords = async function({ doctorId, page = 1, limit = 7, searchQuery = "" }) {
+// Helpful indexes for common queries
+fileUploaderSchema.index({ doctorId: 1, type: 1, updatedAt: -1 });
+fileUploaderSchema.index({ patientId: 1, type: 1, updatedAt: -1 });
+
+fileUploaderSchema.statics.getPaginatedIpdRecords = async function({ doctorId, page = 1, limit = 7, searchQuery = "", sortBy = 'updatedAt', sortDir = 'desc' }) {
   try {
-    const filter = { type: 'ipd' };
-    if (doctorId) filter.doctorId = doctorId;
-    if (searchQuery) {
-      filter.$or = [
-        { admissionDate: { $regex: searchQuery, $options: 'i' } },
-        { dischargeDate: { $regex: searchQuery, $options: 'i' } },
-        // Add more fields as needed
-      ];
+    const pageNumber = parseInt(page, 10) || 1;
+    const limitNumber = parseInt(limit, 10) || 7;
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const match = { type: 'ipd' };
+    if (doctorId) {
+      try {
+        match.doctorId = new mongoose.Types.ObjectId(doctorId);
+      } catch {
+        match.doctorId = doctorId; // fallback if already ObjectId
+      }
     }
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const [files, totalFiles] = await Promise.all([
-      this.find(filter)
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate('patientId'),
-      this.countDocuments(filter),
-    ]);
-    return {
-      files,
-      pagination: {
-        totalFiles,
-        page: parseInt(page),
-        limit: parseInt(limit),
+
+    const pipeline = [
+      { $match: match },
+      {
+        $lookup: {
+          from: 'patients',
+          localField: 'patientId',
+          foreignField: '_id',
+          as: 'patient',
+          pipeline: [
+            { $project: { _id: 1, uid: 1, fullName: 1, phoneNumber: 1 } },
+          ],
+        },
       },
+      { $unwind: { path: '$patient', preserveNullAndEmptyArrays: true } },
+    ];
+
+    if (searchQuery) {
+      const q = String(searchQuery);
+      const or = [
+        { admissionDate: { $regex: q, $options: 'i' } },
+        { dischargeDate: { $regex: q, $options: 'i' } },
+        { 'patient.fullName': { $regex: q, $options: 'i' } },
+        { 'patient.uid': { $regex: q, $options: 'i' } },
+      ];
+      // If numeric, also match phone numbers
+      if (/^\d{3,}$/.test(q)) {
+        or.push({ 'patient.phoneNumber': Number(q) });
+      }
+      pipeline.push({ $match: { $or: or } });
+    }
+
+    const allowedSort = new Set(['updatedAt', 'admissionDate', 'dischargeDate', 'status']);
+    const sortField = allowedSort.has(String(sortBy)) ? String(sortBy) : 'updatedAt';
+    const sortDirection = String(sortDir).toLowerCase() === 'asc' ? 1 : -1;
+
+    pipeline.push({
+      $facet: {
+        data: [
+          { $sort: { [sortField]: sortDirection, _id: 1 } },
+          { $skip: skip },
+          { $limit: limitNumber },
+          {
+            $project: {
+              _id: 1,
+              doctorId: 1,
+              patientId: 1,
+              type: 1,
+              admissionDate: 1,
+              dischargeDate: 1,
+              status: 1,
+              updatedAt: 1,
+              createdAt: 1,
+              patient: 1,
+            },
+          },
+        ],
+        totalCount: [ { $count: 'count' } ],
+      },
+    });
+
+    const [result] = await this.aggregate(pipeline).exec();
+    const data = result?.data || [];
+    const totalFiles = (result?.totalCount?.[0]?.count) || 0;
+    return {
+      files: data,
+      pagination: { totalFiles, page: pageNumber, limit: limitNumber },
     };
   } catch (error) {
     return { error };

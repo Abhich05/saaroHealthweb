@@ -142,27 +142,40 @@ const getFilesByPatientId = async (req, res) => {
     // Support both route param and query param for patientId
     const patientId = req.params.patientId || req.query.patientId;
     const type = req.params.type || req.query.type || 'ipd';
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const sortBy = String(req.query.sortBy || 'updatedAt');
+    const sortDir = String(req.query.sortDir || 'desc').toLowerCase() === 'asc' ? 1 : -1;
 
-    let data = {};
-    if (
-      type === 'health'
-      || type === 'ipd'
-    ) {
-      data = await FileUploader.find({
-        patientId,
-        type,
-      }).sort({ updatedAt: -1 });
-    } else if (type === 'prescription') {
-      data = await Prescription.find({
-        patientId,
-      }).sort({ updatedAt: -1 });
+    // If patientId is not provided, keep behavior but avoid heavy queries
+    if (!patientId) {
+      return res.status(400).json({ error: 'patientId is required' });
     }
 
-    res
-      .status(200)
-      .json({
-        files: data,
-      });
+    const skip = (page - 1) * limit;
+
+    if (type === 'prescription') {
+      const [files, totalFiles] = await Promise.all([
+        Prescription.find({ patientId }).sort({ [sortBy]: sortDir, _id: 1 }).skip(skip).limit(limit).lean(),
+        Prescription.countDocuments({ patientId }),
+      ]);
+      return res.status(200).json({ files, pagination: { totalFiles, page, limit } });
+    }
+
+    // health or ipd
+    const baseFilter = { patientId };
+    if (type) baseFilter.type = type;
+
+    const [files, totalFiles] = await Promise.all([
+      FileUploader.find(baseFilter)
+        .sort({ [sortBy]: sortDir, _id: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      FileUploader.countDocuments(baseFilter),
+    ]);
+
+    return res.status(200).json({ files, pagination: { totalFiles, page, limit } });
   } catch(error) {
     res
       .status(500)
@@ -188,8 +201,8 @@ const updateIpdRecord = async (req, res) => {
 
 const getAllIpdRecords = async (req, res) => {
   try {
-    const { doctorId, page = 1, limit = 7, searchQuery = "" } = req.query;
-    const result = await FileUploader.getPaginatedIpdRecords({ doctorId, page, limit, searchQuery });
+    const { doctorId, page = 1, limit = 7, searchQuery = "", sortBy = 'updatedAt', sortDir = 'desc' } = req.query;
+    const result = await FileUploader.getPaginatedIpdRecords({ doctorId, page, limit, searchQuery, sortBy, sortDir });
     if (result.error) {
       return res.status(500).json({ error: result.error });
     }
