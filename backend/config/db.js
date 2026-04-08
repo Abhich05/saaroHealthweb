@@ -6,9 +6,14 @@ const {
 } = require('../config/config');
 
 const dbConnection = () => {
-  mongoose.connect(MONGO_URL, { dbName: DB_NAME })
-    .then(() => console.log('Connected with MongoDB'))
-    .catch((error) => console.error('An error occurred: ', error));
-}
+  return mongoose.connect(MONGO_URL, { dbName: DB_NAME })
+    .then(() => {
+      console.log('Connected with MongoDB');
+    })
+    .catch((error) => {
+      console.error('MongoDB connection error:', error);
+      process.exit(1); // stop server if DB fails
+    });
+};
 
 module.exports = dbConnection;
